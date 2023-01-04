@@ -18,7 +18,7 @@ Defining the Dot
 norm = np.sqrt(2)
 states = [0,0,280,280] #Resonance arbitrarily decided
 dipole = {(0,2):(1/norm,-1j/norm,0),(1,3):(1/norm,1j/norm,0)}
-gfactors = [[2,0],[-1,-0]] #Parallel parts (first one in each tuple) From Ned's 2015 paper
+gfactors = [[0.5,0],[-0.24,-0]] #Parallel parts (first one in each tuple) From Ned's 2015 paper
 dot = FC.QD(4,states,dipole,gfactors)
 
 
@@ -28,7 +28,7 @@ Defining the Lowering Operator
 lowmat = np.zeros((4,4))
 lowmat[0,2] = 1
 lowmat[1,3] = 1
-lowop = FC.LowOp(Qobj(lowmat),np.sqrt(2*np.pi*.000025))
+lowop = FC.LowOp(Qobj(lowmat),np.sqrt(2*np.pi*.0000025))
 #The lowering operator magnitude is VERY important Fenton. See if you can find a physical value later.
 '''
 Defining Detection polarization
@@ -74,24 +74,24 @@ LP = {
 
 
 
-tau = 5000 #Length of time to go forward, in units of T, the system Frequency
-Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
+tau = 500 #Length of time to go forward, in units of T, the system Frequency
+Nt = 2**6 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
 
-point_spacing = 0.001
+point_spacing = 0.0001
 detuning0 = -.005
 
 
-power_range = 11
+power_range = 101
 P_array = np.zeros(power_range)
 for i in range(power_range):
     P_array[i]=(((i*1)+0))
     
 test = [] 
 testqe = []
-Bpower = 2e-2 
+Bpower = 6e-2  
 for idz, val in enumerate(P_array):
     print('working on spectra',idz+1,'of',len(P_array))
    
@@ -118,7 +118,7 @@ for idz, val in enumerate(P_array):
     '''
     Defining the initial state
     '''
-    rho00 = ((2/2)*(basis(4,0)*basis(4,0).dag()+basis(4,1)*basis(4,1).dag()))
+    rho00 = ((1/2)*(basis(4,0)*basis(4,0).dag()+basis(4,1)*basis(4,1).dag()))
     
    
     
@@ -132,7 +132,8 @@ for idz, val in enumerate(P_array):
     # spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
 
     spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0, detpols = ['X','Y','SP','SM'])
-    test.append(Exp.w)
+    test.append(Exp.Ham())
+    testqe.append(Exp.Rdic)
 
 
     # #For ExciteSpec
@@ -287,11 +288,13 @@ for idz, val in enumerate(P_array):
 fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
 
 #First plot to see how the linear polarizations works out
-ax[0,0].plot(  detuning0+P_array*point_spacing, Z0Lavg, color = 'k' ) #Plokktting the dirint result for comparison
-ax[0,0].plot(detuning0+P_array*point_spacing, ZXavg, color = 'slateblue', linestyle = 'dashed')
-ax[0,0].plot(detuning0+P_array*point_spacing, ZYavg, color = 'lightsteelblue' )
+ax[0,0].plot(detuning0+P_array*point_spacing,Z0Lavg, color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,0].plot(detuning0+P_array*point_spacing,ZXavg, color = 'slateblue', linestyle = 'dashed')
+ax[0,0].plot(detuning0+P_array*point_spacing,ZYavg, color = 'lightsteelblue' )
 ax[0,0].legend(['NoPol','x','y'])
 ax[0,0].set_ylabel("Average value of Spectrum") 
+# ax[0,0].axvline(x=(-1/4)*Bpower*(gfactors[0][0]+gfactors[1][0]))
+# ax[0,0].axvline(x=(1/4)*Bpower*(gfactors[0][0]+gfactors[1][0]))
 
 #Second plot to look at circular polarizations
 ax[0,1].plot(  detuning0+P_array*point_spacing, Z0Cavg, color = 'k' ) #Plokktting the dirint result for comparison

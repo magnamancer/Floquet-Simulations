@@ -8,7 +8,7 @@ import numpy as np
 from qutip import *
 import emisspecmoduleF as esm 
 import scipy as scp
-import FloqClassestesting as FCC
+import FloqClassestesting as FC
 
 import itertools
 import math
@@ -97,19 +97,24 @@ class QSys:
         
             
         
-        # v,CorrPerms = esm.reorder(v)
-        # self.v = Qobj(v)
+        v,CorrPerms = esm.reorder(v)
+        self.v = Qobj(v)
         
+        # test = (self.v.dag()*(self.AtomHam()+self.ZHam())*self.v).full()
+        # test[0,0] *= 1
+        # test[1,1] *= 1
+        
+        # testy = Qobj(test)
        
             
-        # H = [self.v.dag()*(self.AtomHam()+self.ZHam())*self.v,                                                    \
-        #     [self.v.dag()*self.LasHam()[0]*self.v,'exp(1j * w * t )'],                    \
-        #     [self.v.dag()*self.LasHam()[1]*self.v, 'exp(-1j * w * t )']]                  #Full Hamiltonian in string format, a form acceptable to QuTiP
+        H = [self.v.dag()*(self.AtomHam()+self.ZHam())*self.v,                                                    \
+            [self.v.dag()*self.LasHam()[0]*self.v,'exp(1j * w * t )'],                    \
+            [self.v.dag()*self.LasHam()[1]*self.v, 'exp(-1j * w * t )']]                  #Full Hamiltonian in string format, a form acceptable to QuTiP
         
         
-        H = [(self.AtomHam()+self.ZHam()),                                                    
-            [self.LasHam()[0],'exp(1j * w * t )'],                    
-            [self.LasHam()[1], 'exp(-1j * w * t )']]   
+        # H = [(self.AtomHam()+self.ZHam()),                                                    
+            # [self.LasHam()[0],'exp(1j * w * t )'],                    
+            # [self.LasHam()[1], 'exp(-1j * w * t )']]   
             
          
         return H
@@ -216,8 +221,8 @@ class QSys:
         
         if opts == None:
             opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-12                                #Absolute tolerance
-            opts.rtol = 1e-12                                  #Relative tolerance
+            opts.atol = 1e-6                                  #Absolute tolerance
+            opts.rtol = 1e-8                                  #Relative tolerance
             opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
         
         
@@ -232,20 +237,30 @@ class QSys:
         taume = ((Ntau/PDM)/Nt)*self.T                          
         dtau = taume/Ntau                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
-   
+        
         
         f0,qe,f_modes_table_t,fstates,fstatesct= esm.PrepWork(self.Ham(),self.T,self.Hargs,tlist,taulist, opts = opts)
         print('found f0, qe, fstates')
         
-        # # Also transforming the lowering operator into the new basis
-        # if self.Bfield != None:
-        #     self.LowOp.mat = self.v.dag()*(self.LowOp.mat)*self.v
-        
-        
-        amps, lmax = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.mat ,f_modes_table_t = f_modes_table_t, opts = opts)
+        '''
+        '''
+
+        '''
+        '''
+
+        # Also transforming the lowering operator into the new basis
+        if self.Bfield != None:
+            self.LowOp.matT = self.v.dag()*(self.LowOp.mat)*self.v
+            
+        amps, lmax = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.matT ,f_modes_table_t = f_modes_table_t, opts = opts)
         print('found lmax =', lmax)
         
         Rdic = esm.Rt(qe,amps,lmax,self.LowOp.mag,self.beat,time_sense )
+        self.Rdic = Rdic
+        
+        
+        '''
+        '''
         print('Built R(t)')
 
         LowOpDetList =  esm.lowop_detpol_modifier(self.LowOp.mat,self.QD.dipoles,detpols)
@@ -259,14 +274,16 @@ class QSys:
         excitevals = {}
         self.test = {}
         for Ldx, Lowp in enumerate(LowOpDetList):
-            
+           
             '''
             Doing the raising and lowering operator transformations, to move them
                 into the Floquet basis for every t_inf+t
             '''
-            # # Also transforming the lowering operator into the new basis
-            # if self.Bfield != None:
-            #     Lowp = self.v.dag()*Lowp*self.v
+            # Also transforming the lowering operator into the new basis
+            if self.Bfield != None:
+                Lowp = self.v.dag()*Lowp*self.v
+                
+            
             lofloq = fstatesct @ (Lowp).full() @ fstates
             hifloq = np.transpose(lofloq.conj(),axes=(0,2,1)) 
             
@@ -291,7 +308,7 @@ class QSys:
                                                    t_span = (0,t0),
                                                    y0=rho01                 ,
                                                    args=(Rdic,self.beat)                 ,
-                                                   method='DOP853'         ,
+                                                   # method='DOP853'         ,
                                                    t_eval=np.append(taulist,t0)          ,
                                                    rtol=opts.rtol               ,
                                                    atol=opts.atol).y[:,-1]                                                                 
@@ -306,14 +323,14 @@ class QSys:
         
        
             
-            
+            # self.rhoss = np.reshape(rho00, (self.QD.Hdim,self.QD.Hdim),order='F')
             Pop_t = [ (hifloq[i*PDM] @ lofloq[i*PDM])                       \
                           @ np.reshape(
                                 scp.integrate.solve_ivp(esm.rhodot,
                                                         t_span = (t0,t0+tlistprime[-1])  ,
                                                         y0=rho00                ,
                                                         args=(Rdic,self.beat)               ,
-                                                        method='DOP853'         ,
+                                                        # method='DOP853'         ,
                                                         t_eval=(t0+tlistprime)            ,
                                                         rtol=opts.rtol               ,
                                                         atol=opts.atol).y[:,i]       ,
