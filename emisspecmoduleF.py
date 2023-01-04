@@ -285,6 +285,11 @@ def LTrunc(PDM,Nt,tlist,taulist,low_op,f_modes_table_t, opts = None):
     amps=np.zeros_like(lowfloqarray, dtype = complex) #Creating the empty array to hold the Fourier Amplitudes of each index at every harmonic
     amps = scp.fft.fft(lowfloqarray,axis=2) #This loop performs the FFT of each index of the Floquet mode basis lowering operator to find their harmonic amplitudes.
     amps = (np.real(amps))/len(tlist)
+    
+    
+    # amps1 = (1/len(tlist))*np.stack([lowfloq[i].dag().full() @ lowfloq[i].full()],axis = 2)
+    
+    
     '''
     Finding the FFT frequency peaks using np.where
     '''
@@ -315,7 +320,7 @@ def LTrunc(PDM,Nt,tlist,taulist,low_op,f_modes_table_t, opts = None):
                 lmax.append(abs(indices[i+Hdim*j][index[0][0]]))
             except ValueError:
                 lmax.append(0)
-    lmax = np.amax(lmax)
+    lmax = int((len(tlist)/2) - 1) #np.amax(lmax)
     
     return amps,lmax
 
