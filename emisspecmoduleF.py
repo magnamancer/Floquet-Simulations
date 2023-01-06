@@ -204,12 +204,11 @@ def PrepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
     
     
     print('starting f0')
-    f0, qe = floquet_modes2( H, T,  args, sort = True, options = opts)
+    f0, qe = floquet_modes2( H, T,  args, sort = False, options = opts)
+    _,CorrPerms = reorder(np.hstack([i.full() for i in f0]))
     
-    # _,CorrPerms = reorder(np.hstack([i.full() for i in f0]))
-    
-    # f0 = [f0[i] for i in CorrPerms]
-    # qe = [qe[i] for i in CorrPerms]
+    f0 = [f0[i] for i in CorrPerms]
+    qe = [qe[i] for i in CorrPerms]
     
     f_modes_table_t = floquet_modes_table2(     \
                               f0,  qe, tlist, H,  T,    \
@@ -284,12 +283,16 @@ def LTrunc(PDM,Nt,tlist,taulist,low_op,f_modes_table_t, opts = None):
     '''
     amps=np.zeros_like(lowfloqarray, dtype = complex) #Creating the empty array to hold the Fourier Amplitudes of each index at every harmonic
     amps = scp.fft.fft(lowfloqarray,axis=2) #This loop performs the FFT of each index of the Floquet mode basis lowering operator to find their harmonic amplitudes.
-    amps = (np.real(amps))/len(tlist)
+    amps = np.sum(((amps))/len(tlist),axis=2)
     
-    
-    # amps1 = (1/len(tlist))*np.stack([lowfloq[i].dag().full() @ lowfloq[i].full()],axis = 2)
-    
-    
+    # # #Using asteric (sp???) here because I need the elementwise absolute square value of each matrix element before averaging
+    # lowfloqarraytest = np.zeros((Hdim,Hdim,Nt),dtype = complex) #Creating an empty array to hold the lowering operator as an array instead of a list of QObjs
+    # for i in range(Hdim):
+    #     for j in range(Hdim):
+    #         for k in range(Nt):
+    #             lowfloqarraytest[i,j,k] =               \
+    #                               lowfloq[k][i][0][j]*lowfloq[k][i][0][j].conj()
+    # amps = (1/Nt)*np.sum(lowfloqarraytest,axis = 2)
     '''
     Finding the FFT frequency peaks using np.where
     '''
@@ -320,7 +323,7 @@ def LTrunc(PDM,Nt,tlist,taulist,low_op,f_modes_table_t, opts = None):
                 lmax.append(abs(indices[i+Hdim*j][index[0][0]]))
             except ValueError:
                 lmax.append(0)
-    lmax = int((len(tlist)/2) - 1) #np.amax(lmax)
+    lmax = np.amax(lmax)
     
     return amps,lmax
 
@@ -346,8 +349,8 @@ def Rt(qe,amps,lmax,Gamma,beatfreq,time_sense=0):
     '''    
     Defining the exponential sums in terms of w now to save space below
     '''
-    def delta(x,y,l):
-        return (qw[x]-qw[y]+l)
+    def delta(x,y):
+        return (qe[x]-qe[y])
     
     '''
     Next step is to create the R matrix from the "good" values of the indices
@@ -364,34 +367,32 @@ def Rt(qe,amps,lmax,Gamma,beatfreq,time_sense=0):
     
     # at = [p for p in itertools.product(range(0,Hdim),repeat = 4)]
     # bt = [p for p in itertools.product(range(-lmax,lmax+1),repeat = 2)]
-    testidx = [list(sum(p, ())) for p in itertools.product(                                                                      #Taking outer product of below to find all possible indices for a,b,ap,bp,l,lp
-                                                            [Hdx for Hdx in itertools.product(range(0,Hdim),repeat = 4)], #All possible iterations of a,b,ap,bp
-                                                            [ldx for ldx in itertools.product(range(-lmax,lmax+1),repeat = 2)])]  #All possible iterations of l,lp
+    testidx = [Hdx for Hdx in itertools.product(range(0,Hdim),repeat = 4)]  #All possible iterations of A,AP,B,BP
     
     
-    TimeDepCoeffArray = [np.round(delta(index[0],index[1],index[4]) - delta(index[2],index[3],index[5]),14) for index in testidx] #time dependence of the Hamiltonian
+    TimeDepCoeffArray = [np.round(delta(index[0],index[2]) - delta(index[1],index[3]),14) for index in testidx] #time dependence of the Hamiltonian
     
     ValidTimeDepIdx = (~ma.masked_greater(np.absolute(TimeDepCoeffArray),time_sense).mask).nonzero()[0] #Creates a list of the indices of the time dependence coefficient array whose entries are within the time dependence constraint time_sense
 
     validdx = [tuple(testidx[i]) for i in ValidTimeDepIdx] #creates a list tuples that are the valid (a,b,ap,bp,l,lp) indices to construct R(t) with the given secular constraint
-    
+
     
     
     Rdic = {} #Time to build R(t). Creating an empty dictionary.
     for rdx,row in enumerate(validdx): #For every entry in the list of tuples, create R(t)
         # a = row[0]
-        # b = row[1]
-        # ap = row[2]
+        # b = row[2]
+        # ap = row[1]
         # bp = row[3]
         # l = row[4]
         # lp = row[5]
         #Below creates Rt[m+Hdim*n,p+Hdim*q] by doing a list comprehension to build the resulting R(t) as a column-stacked matrix, then reshaping it to the proper dimensions
         Rt = np.reshape([
-                Gamma*amps[row[0],row[1],row[4]]*np.conj(amps[row[2],row[3],row[5]])   * 
-                    (     kron(m     ,row[0])*kron(n,row[2])*kron(p,row[1])*kron(q,row[3]) -        #First Term of the FLiME                        
-                    (1/2)*kron(row[0],row[2])*kron(m,row[3])*kron(p,row[1])*kron(q,n     ) - 
-                    (1/2)*kron(row[0],row[2])*kron(n,row[1])*kron(p,     m)*kron(q,row[3])) 
-                  for (m,n,p,q) in [row for row in itertools.product(range(0,Hdim),repeat = 4)]],                                                          #the order of n,m,p,q here is *very* important for some reason that I don't feel like investigating. Something something transpose
+                Gamma*amps[row[0],row[2]]*np.conj(amps[row[1],row[3]])   * 
+                    (     kron(m     ,row[0])*kron(n,row[1])*kron(p,row[2])*kron(q,row[3]) -        #First Term of the FLiME                        
+                    (1/2)*kron(row[0],row[1])*kron(m,row[3])*kron(p,row[2])*kron(q,n     ) - 
+                    (1/2)*kron(row[0],row[1])*kron(n,row[2])*kron(p,     m)*kron(q,row[3])) 
+                  for (m,n,p,q) in [row1 for row1 in itertools.product(range(0,Hdim),repeat = 4)]],                                                          #the order of n,m,p,q here is *very* important for some reason that I don't feel like investigating. Something something transpose
               (Hdim**2,Hdim**2))
                             
         try:
@@ -416,46 +417,44 @@ def Rt(qe,amps,lmax,Gamma,beatfreq,time_sense=0):
     #                     for ap in range(Hdim):
     #                         for b in range(Hdim):
     #                             for bp in range(Hdim):
-    #                                 for l in range(-lmax,lmax+1):
-    #                                     for lp in range(-lmax,lmax+1):
-    #                                         if np.round(abs(delta(a,b,l)-delta(ap,bp,lp)),10) <= time_sense:
-                                                
-    #                                             #First Term of the FLiME
-    #                                             Rt = np.zeros((Hdim**2,Hdim**2),dtype=complex)
-    #                                             Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
-    #                                             amps[a,b,l]*np.conj(amps[ap,bp,lp]) * \
-    #                                                     kron(m,a)*kron(n,ap)*kron(p,b)*kron(q,bp)  
-                                                
-                                                
-                                                
-    #                                             #Second Term of the FLiME
-    #                                             Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
-    #                                             amps[a,b,l]*np.conj(amps[ap,bp,lp]) * \
-    #                                                     (-1/2)*kron(a,ap)*kron(m,bp)*kron(p,b)*kron(q,n)
-                                                
-                                                
-    #                                             #Third Term of the FLiME
-    #                                             Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
-    #                                             amps[a,b,l]*np.conj(amps[ap,bp,lp]) * \
-    #                                                     (-1/2)*kron(a,ap)*kron(n,b)*kron(p,m)*kron(q,bp)
-                                                
-                                                
-    #                                             '''
-    #                                             Finally, For each index, I append the total R(t) of that
-    #                                                 index to a dictionary. The key of the dictionary 
-    #                                                 entries are actually the (pre omega multiplication)
-    #                                                 time dependencies, which is convenient I think. This 
-    #                                                 way, each index that satisfies the condition above 
-    #                                                 is just appended to its appropriate time dependent
-    #                                                 dictionary entry, with time dependence added below!
-                                                    
-    #                                             '''
-    
-    #                                             try:
-    #                                                 Rdic[delta(a,b,l)-delta(ap,bp,lp)] += Rt
-    #                                             except KeyError:
-    #                                                 Rdic[delta(a,b,l)-delta(ap,bp,lp)] = Rt   
-                                                    
+    #                                 if np.round(abs(delta(a,b)-delta(ap,bp)),12) <= time_sense:
+                                        
+    #                                     #First Term of the FLiME
+    #                                     Rt = np.zeros((Hdim**2,Hdim**2),dtype=complex)
+    #                                     Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
+    #                                     amps[a,b]*np.conj(amps[ap,bp]) * \
+    #                                             kron(m,a)*kron(n,ap)*kron(p,b)*kron(q,bp)  
+                                        
+                                        
+                                        
+    #                                     #Second Term of the FLiME
+    #                                     Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
+    #                                     amps[a,b]*np.conj(amps[ap,bp]) * \
+    #                                             (-1/2)*kron(a,ap)*kron(m,bp)*kron(p,b)*kron(q,n)
+                                        
+                                        
+    #                                     #Third Term of the FLiME
+    #                                     Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
+    #                                     amps[a,b]*np.conj(amps[ap,bp]) * \
+    #                                             (-1/2)*kron(a,ap)*kron(n,b)*kron(p,m)*kron(q,bp)
+                                        
+                                        
+    #                                     '''
+    #                                     Finally, For each index, I append the total R(t) of that
+    #                                         index to a dictionary. The key of the dictionary 
+    #                                         entries are actually the (pre omega multiplication)
+    #                                         time dependencies, which is convenient I think. This 
+    #                                         way, each index that satisfies the condition above 
+    #                                         is just appended to its appropriate time dependent
+    #                                         dictionary entry, with time dependence added below!
+                                            
+    #                                     '''
+
+    #                                     try:
+    #                                         Rdic[delta(a,b)-delta(ap,bp)] += Rt
+    #                                     except KeyError:
+    #                                         Rdic[delta(a,b)-delta(ap,bp)] = Rt   
+                                            
     # return Rdic
 
 '''
@@ -888,8 +887,8 @@ def reorder(M,state0mat = None):
         dots = [sum([abs(np.dot(Mperm[:,i],state0mat[i])) for i in range(np.shape(M)[1])]) for Mperm in Mperms]
     
     CorrPerm = np.where(dots == np.amax(dots))[0][0]
-    v = M[:,list(itertools.permutations(range(0,shape(M)[0]),shape(M)[0]))[CorrPerm]]
-    # v = np.sqrt(1/2)*np.array([[-1,1,0,0],[1,1,0,0],[0,0,1,1],[0,0,1,-1]])
+    # v = M[:,list(itertools.permutations(range(0,shape(M)[0]),shape(M)[0]))[CorrPerm]]
+    v = np.sqrt(1/2)*np.array([[1,1,0,0],[1,-1,0,0],[0,0,1,1],[0,0,1,-1]])
         
 
 

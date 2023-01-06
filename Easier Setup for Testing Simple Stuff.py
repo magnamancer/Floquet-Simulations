@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Fri Jan  6 11:27:13 2023
+
+@author: FentonClawson
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Sat Nov 26 14:21:03 2022
 
 @author: FentonClawson
@@ -75,30 +82,30 @@ LP = {
 
 
 tau = 500 #Length of time to go forward, in units of T, the system Frequency
-Nt = 2**8 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
+Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
 
 point_spacing = 0.0001
-detuning0 = -.005
+detuning0 = -.000
 
 
-power_range = 101
+power_range = 1
 P_array = np.zeros(power_range)
 for i in range(power_range):
     P_array[i]=(((i*1)+0))
     
 test = [] 
 testqe = []
-Bpower = 6e-2  
+Bpower = 0e-2  
 for idz, val in enumerate(P_array):
     print('working on spectra',idz+1,'of',len(P_array))
    
     '''
     Defining the laser
     ''' 
-    Lpower = 2*np.pi*0.001
+    Lpower = 2*np.pi*0.01
     
     Lpol = 'D'
     
@@ -129,45 +136,45 @@ for idz, val in enumerate(P_array):
         omega_array = esm.freqarray(Exp.T,Nt,tau,PDM = PDM)    
     
 
-    # spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
+    spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0, detpols = ['X','Y','SP','SM'],retg1='True')
 
-    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0, detpols = ['X','Y','SP','SM'])
-    test.append(Exp.f0)
-    testqe.append(Exp.qe)
+    # spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0, detpols = ['X','Y','SP','SM'])
+    # test.append(Exp.f0)
+    # testqe.append(Exp.qe)
 
 
-    # #For ExciteSpec
-    Z0Lavg.append(spec1['X']+spec1['Y'])
-    Z0Cavg.append(spec1['SP']+spec1['SM'])
-    ZXavg.append(spec1['X'])
-    ZYavg.append(spec1['Y'])
-    ZPavg.append(spec1['SP'])
-    ZMavg.append(spec1['SM'])
+    # # #For ExciteSpec
+    # Z0Lavg.append(spec1['X']+spec1['Y'])
+    # Z0Cavg.append(spec1['SP']+spec1['SM'])
+    # ZXavg.append(spec1['X'])
+    # ZYavg.append(spec1['Y'])
+    # ZPavg.append(spec1['SP'])
+    # ZMavg.append(spec1['SM'])
 
     
 
 
 
 
-    # Z0L.append(spec1['X']+spec1['Y'])
-    # Z0C.append(spec1['SP']+spec1['SM'])
-    # ZX.append(spec1['X'])
-    # ZY.append(spec1['Y'])
-    # ZP.append(spec1['SP'])
-    # ZM.append(spec1['SM'])
+    Z0L.append(spec1['X']+spec1['Y'])
+    Z0C.append(spec1['SP']+spec1['SM'])
+    ZX.append(spec1['X'])
+    ZY.append(spec1['Y'])
+    ZP.append(spec1['SP'])
+    ZM.append(spec1['SM'])
 
-    # Z0g1.append(g1dic['X']+g1dic['Y'])
-    # ZXg1.append(g1dic['X'])
-    # ZYg1.append(g1dic['Y'])
-    # ZPg1.append(g1dic['SP'])
-    # ZMg1.append(g1dic['SM'])
+    Z0g1.append(g1dic['X']+g1dic['Y'])
+    ZXg1.append(g1dic['X'])
+    ZYg1.append(g1dic['Y'])
+    ZPg1.append(g1dic['SP'])
+    ZMg1.append(g1dic['SM'])
     
-    # Z0Lavg.append(np.average(Z0L[-1]))
-    # Z0Cavg.append(np.average(Z0C[-1]))
-    # ZXavg.append(np.average(ZX[-1]))
-    # ZYavg.append(np.average(ZY[-1]))
-    # ZPavg.append(np.average(ZP[-1]))
-    # ZMavg.append(np.average(ZM[-1]))
+    Z0Lavg.append(np.average(Z0L[-1]))
+    Z0Cavg.append(np.average(Z0C[-1]))
+    ZXavg.append(np.average(ZX[-1]))
+    ZYavg.append(np.average(ZY[-1]))
+    ZPavg.append(np.average(ZP[-1]))
+    ZMavg.append(np.average(ZM[-1]))
     
 
    
@@ -179,52 +186,52 @@ for idz, val in enumerate(P_array):
  
 
 
-# # For plotting individual spectra
-# idx = 0                                            #Plotting the results!
+# For plotting individual spectra
+idx = 0                                            #Plotting the results!
 
 
-# # # For plotting Excitation Arrays
-# fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
+# # For plotting Excitation Arrays
+fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
+
+#First plot to see how the linear polarizations works out
+ax[0,0].semilogy( omega_array-(Exp.beat/(4*np.pi)),Z0L[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,0].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZX[idx], color = 'slateblue')
+ax[0,0].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZY[idx], color = 'navy',linestyle = 'dashed')
+ax[0,0].legend(['NoPol','x','y'])
+ax[0,0].set_xlabel('$\omega$ [THz]')
+ax[0,0].set_ylabel("Amplitude (arb)") 
+
+#Second plot to look at circular polarizations
+ax[0,1].semilogy( omega_array-(Exp.beat/(4*np.pi)),Z0C[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,1].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZP[idx], color = 'green')
+ax[0,1].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZM[idx], color = 'orangered',linestyle = 'dashed')
+ax[0,1].legend(['NoPol','SP','SM'])
+ax[0,1].set_xlabel('$\omega$ [THz]')
+ax[0,1].set_ylabel("Amplitude (arb)") 
 
 # #First plot to see how the linear polarizations works out
-# ax[0,0].semilogy( omega_array-(Exp.beat/(4*np.pi)),Z0L[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[0,0].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZX[idx], color = 'slateblue')
-# ax[0,0].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZY[idx], color = 'navy',linestyle = 'dashed')
-# ax[0,0].legend(['NoPol','x','y'])
-# ax[0,0].set_xlabel('$\omega$ [THz]')
-# ax[0,0].set_ylabel("Amplitude (arb)") 
+# ax[1,0].semilogy( omega_array-(Exp.beat/(4*np.pi)),abs(Z0L[idx]-Z0C[idx])*100, color = 'k' ) #Plokktting the dirint result for comparison
+# ax[1,0].legend(['Absolute percent deviation of Linear X+Y from circular SP+SM'])
+# ax[1,0].set_xlabel('$\omega$ [THz]')
+# ax[1,0].set_ylabel("Amplitude (arb)") 
 
-# #Second plot to look at circular polarizations
-# ax[0,1].semilogy( omega_array-(Exp.beat/(4*np.pi)),Z0C[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[0,1].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZP[idx], color = 'green')
-# ax[0,1].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZM[idx], color = 'orangered',linestyle = 'dashed')
-# ax[0,1].legend(['NoPol','SP','SM'])
-# ax[0,1].set_xlabel('$\omega$ [THz]')
-# ax[0,1].set_ylabel("Amplitude (arb)") 
+#Third for linear percent deviation
+ax[1,0].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[1,0].plot(ZXg1[idx], color = 'slateblue', linestyle = 'dashed')
+ax[1,0].plot(ZYg1[idx], color = 'lightsteelblue' )
+ax[1,0].legend(['steps'])
+ax[1,0].set_ylabel("g1") 
 
-# # #First plot to see how the linear polarizations works out
-# # ax[1,0].semilogy( omega_array-(Exp.beat/(4*np.pi)),abs(Z0L[idx]-Z0C[idx])*100, color = 'k' ) #Plokktting the dirint result for comparison
-# # ax[1,0].legend(['Absolute percent deviation of Linear X+Y from circular SP+SM'])
-# # ax[1,0].set_xlabel('$\omega$ [THz]')
-# # ax[1,0].set_ylabel("Amplitude (arb)") 
-
-# #Third for linear percent deviation
-# ax[1,0].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[1,0].plot(ZXg1[idx], color = 'slateblue', linestyle = 'dashed')
-# ax[1,0].plot(ZYg1[idx], color = 'lightsteelblue' )
-# ax[1,0].legend(['steps'])
-# ax[1,0].set_ylabel("g1") 
-
-# #Fourth for circular percent deviation
-# ax[1,1].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[1,1].plot(ZPg1[idx], color = 'green')
-# ax[1,1].plot(ZMg1[idx], color = 'orangered' , linestyle = 'dashed')
-# ax[1,1].legend(['NoPol','P','M'])
-# ax[1,1].set_xlabel('steps')
-# ax[1,1].set_ylabel("g1") 
+#Fourth for circular percent deviation
+ax[1,1].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[1,1].plot(ZPg1[idx], color = 'green')
+ax[1,1].plot(ZMg1[idx], color = 'orangered' , linestyle = 'dashed')
+ax[1,1].legend(['NoPol','P','M'])
+ax[1,1].set_xlabel('steps')
+ax[1,1].set_ylabel("g1") 
 
 
-# fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {Lpol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}" )
+fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {Lpol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}" )
 
 
 
