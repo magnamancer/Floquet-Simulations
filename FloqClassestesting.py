@@ -100,21 +100,16 @@ class QSys:
         v,CorrPerms = esm.reorder(v)
         self.v = Qobj(v)
         
-        # test = (self.v.dag()*(self.AtomHam()+self.ZHam())*self.v).full()
-        # test[0,0] *= 1
-        # test[1,1] *= 1
-        
-        # testy = Qobj(test)
-       
+     
             
-        H = [self.v.dag()*(self.AtomHam()+self.ZHam())*self.v,                                                    \
-            [self.v.dag()*self.LasHam()[0]*self.v,'exp(1j * w * t )'],                    \
-            [self.v.dag()*self.LasHam()[1]*self.v, 'exp(-1j * w * t )']]                  #Full Hamiltonian in string format, a form acceptable to QuTiP
+        # H = [self.v.dag()*(self.AtomHam()+self.ZHam())*self.v,                                                    \
+        #     [self.v.dag()*self.LasHam()[0]*self.v,'exp(1j * w * t )'],                    \
+        #     [self.v.dag()*self.LasHam()[1]*self.v, 'exp(-1j * w * t )']]                  #Full Hamiltonian in string format, a form acceptable to QuTiP
         
         
-        # H = [(self.AtomHam()+self.ZHam()),                                                    
-            # [self.LasHam()[0],'exp(1j * w * t )'],                    
-            # [self.LasHam()[1], 'exp(-1j * w * t )']]   
+        H = [(self.AtomHam()+self.ZHam()),                                                    
+            [self.LasHam()[0],'exp(1j * w * t )'],                    
+            [self.LasHam()[1], 'exp(-1j * w * t )']]   
             
          
         return H
@@ -145,7 +140,7 @@ class QSys:
         self.forwardrot  = (-1/2)*sum([x+y for (x,y) in zip(self.Om2.values(),self.Om1s.values())])
         self.backwardrot = (-1/2)*sum([x+y for (x,y) in zip(self.Om1.values(),self.Om2s.values())])
         
-        return self.forwardrot, self.backwardrot
+        return Qobj(np.round(self.forwardrot,10)), Qobj(np.round(self.backwardrot,10))
 
     
     '''
@@ -163,7 +158,7 @@ class QSys:
                     eta[m] = eta[n]+self.Lavg
             self.AtomHammy[n,n] = self.QD.states[n]*(2*np.pi)-eta[n]
         
-        return Qobj(self.AtomHammy)
+        return Qobj(np.round(self.AtomHammy,10))
     
     
     '''
@@ -201,7 +196,7 @@ class QSys:
                         self.ZHammy[j,j] =  1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
                         self.ZHammy[i,j] = self.ZHammy[j,i] = (1/2)*self.Bfield.Bvec[0]*self.QD.gfactors[Count][0]
                         Count += 1
-        return Qobj(self.ZHammy)
+        return Qobj(np.round(self.ZHammy,10))
         
         
         
@@ -240,6 +235,8 @@ class QSys:
         
         
         f0,qe,f_modes_table_t,fstates,fstatesct= esm.PrepWork(self.Ham(),self.T,self.Hargs,tlist,taulist, opts = opts)
+        self.f0 = np.stack([i.full() for i in f0])
+        self.qe = qe
         print('found f0, qe, fstates')
         
         '''
@@ -248,11 +245,13 @@ class QSys:
         '''
         '''
 
-        # Also transforming the lowering operator into the new basis
-        if self.Bfield != None:
-            self.LowOp.matT = self.v.dag()*(self.LowOp.mat)*self.v
+        # # Also transforming the lowering operator into the new basis
+        # if self.Bfield != None:
+        #     self.LowOp.matT = self.v.dag()*(self.LowOp.mat)*self.v
             
-        amps, lmax = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.matT ,f_modes_table_t = f_modes_table_t, opts = opts)
+        amps, lmax = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.mat ,f_modes_table_t = f_modes_table_t, opts = opts)
+
+        
         print('found lmax =', lmax)
         
         Rdic = esm.Rt(qe,amps,lmax,self.LowOp.mag,self.beat,time_sense )
@@ -279,9 +278,9 @@ class QSys:
             Doing the raising and lowering operator transformations, to move them
                 into the Floquet basis for every t_inf+t
             '''
-            # Also transforming the lowering operator into the new basis
-            if self.Bfield != None:
-                Lowp = self.v.dag()*Lowp*self.v
+            # # Also transforming the lowering operator into the new basis
+            # if self.Bfield != None:
+            #     Lowp = self.v.dag()*Lowp*self.v
                 
             
             lofloq = fstatesct @ (Lowp).full() @ fstates
