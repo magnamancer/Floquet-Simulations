@@ -199,16 +199,19 @@ def PrepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
     
     
     
-    t0 = taulist[-1]+taulist[1]  #The leng of time Tau forward for which the system is being evolved
-    tlistnew = np.concatenate((taulist,t0+tlist)) #The times over which I'll need to solve the lowering and raising operators. Runs from Tau to 2*Tau+T = 2*(N*T)+T=T(2N+1)
+    steadystate_time = taulist[-1]+taulist[1]  #The leng of time Tau forward for which the system is being evolved
+    time_evolution_t_points = np.concatenate((taulist, steadystate_time+tlist)) #The times over which I'll need to solve the lowering and raising operators. Runs from Tau to 2*Tau+T = 2*(N*T)+T=T(2N+1)
     
     
     print('starting f0')
-    f0, qe = floquet_modes2( H, T,  args, sort = False, options = opts)
+    f0, qe = floquet_modes2( H, T,  args, sort = True, options = opts)
     _,CorrPerms = reorder(np.hstack([i.full() for i in f0]))
     
-    f0 = [f0[i] for i in CorrPerms]
-    qe = [qe[i] for i in CorrPerms]
+    # f0 = [f0[i] for i in CorrPerms]
+    # qe = [qe[i] for i in CorrPerms]
+    
+    
+
     
     f_modes_table_t = floquet_modes_table2(     \
                               f0,  qe, tlist, H,  T,    \
@@ -223,29 +226,24 @@ def PrepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
         3) Finally, every fmode array slice (for each time Tau+t) is multiplied directly (as opposed to Matmul)) by exp(-1j*qtime[i,k]) = exp(-1*qe[i]*)
     '''
     
-
     
-    fmodestile = np.tile(np.stack([np.hstack([f_modes_table_t[idx][i].full() for i in range(Hdim)]) for idx in range(len(tlist))],axis = 2),int(np.ceil(len(taulist)/len(tlist))+1))
-   
+    f_modes_list_one_period = [[mode.full() for mode in modest] for modest in f_modes_table_t]
     
-   
-    fstates = np.stack([np.stack([np.transpose(np.stack([fmodestile[:,i,k]*np.exp(-1j*qe[i]*(t0+tlistnew[k])) for i in range(Hdim)]))]) for k in range(np.shape(fmodestile)[2])])[:,0,:,:]
-
     
-    # qtime = np.outer(qe,(t0+tlistnew))
-    # fstates = np.stack([
-    #             np.stack([
-    #                 np.hstack([
-    #                     fmodestile[:,i,k]*np.exp(-1j*qtime[i,k]) for i in range(Hdim)])]) for k in range(shape(fmodestile)[2])])[:,0,:,:]
+    tau = int((taulist[-1]+taulist[1])/T) #Full number of periods forward for time evaluation
+    f_modes_list_time_eval = f_modes_list_one_period*(tau+1) #Full time evaluation is tau number of periods +1 period for time averaging, so I need that many periods of modes
+    
+    
+    fstates =  np.stack([np.hstack([f_modes_list_time_eval[t][mode]*np.exp(-1j*qe[mode]*(steadystate_time+time_evolution_t_points[t])) for mode in range(Hdim)]) for t in range(len(time_evolution_t_points))],axis=0)
     
     fstatesct = np.transpose(fstates.conj(),axes=(0,2,1))
     
-    return f0,qe,f_modes_table_t,fstates,fstatesct
+    return f0,qe,f_modes_list_one_period,fstates,fstatesct
 
 
 
 
-def LTrunc(PDM,Nt,tlist,taulist,low_op,f_modes_table_t, opts = None):
+def LTrunc(PDM,Nt,tlist,taulist,low_op,fmodeslist, opts = None):
     
     if opts == None:
         opts = Options()                                  #Setting up the options used in the mode and state solvers
@@ -260,72 +258,34 @@ def LTrunc(PDM,Nt,tlist,taulist,low_op,f_modes_table_t, opts = None):
     I'm going to keep this as its own method for now, as it might be nice
         to be bale to pull graphs of the FFT of the lowering operators when
         desired.'
+        
+        
+    This function transforms the lowering operator into the Floquet mode basis
     '''
- 
-    lowfloq = []                           #Defining an empty matrix to store the lowering operator in the Floquet mode basis for every time t in tlist
-    for idx in range(Nt):
-        lowfloq.append(low_op.transform( \
-                                        f_modes_table_t[idx*PDM],False)) #For every time t in tlist, transform the lowering operator to the Floquet mode basis using the Floquet mode table
-            
+    
+    fmodes_array = np.stack([np.hstack(modes_t) for modes_t in fmodeslist],axis=0)
+    lowfloqarray = (np.transpose(fmodes_array.conj(),(0,2,1) ) @ low_op.full() @ fmodes_array)
+               
 
-    '''
-    Recasting lowfloq as an array because QuTiP stores arrays in a very weird way
-    '''
-    lowfloqarray = np.zeros((Hdim,Hdim,Nt),dtype = complex) #Creating an empty array to hold the lowering operator as an array instead of a list of QObjs
-    for i in range(Hdim):
-        for j in range(Hdim):
-            for k in range(Nt):
-                lowfloqarray[i,j,k] =               \
-                                  lowfloq[k][i][0][j] #This loop takes each index of each of the lowering operator QObjects in the list and stores them in an array
-
+    
     '''
     Performing the 1-D FFT
     '''
-    amps=np.zeros_like(lowfloqarray, dtype = complex) #Creating the empty array to hold the Fourier Amplitudes of each index at every harmonic
-    amps = scp.fft.fft(lowfloqarray,axis=2) #This loop performs the FFT of each index of the Floquet mode basis lowering operator to find their harmonic amplitudes.
-    amps = np.sum(((amps))/len(tlist),axis=2)
+    #Creating the empty array to hold the Fourier Amplitudes of each index at every harmonic
+    amps0 = scp.fft.fft(lowfloqarray,axis=0) #This loop performs the FFT of each index of the Floquet mode basis lowering operator to find their harmonic amplitudes.
     
-    # # #Using asteric (sp???) here because I need the elementwise absolute square value of each matrix element before averaging
-    # lowfloqarraytest = np.zeros((Hdim,Hdim,Nt),dtype = complex) #Creating an empty array to hold the lowering operator as an array instead of a list of QObjs
+    amps = np.sum((amps0 * amps0.conj()),axis=0)/len(tlist)
+    ampsr = np.sum((np.real(amps0))**2,axis=0)/len(tlist)
+    
+    
     # for i in range(Hdim):
     #     for j in range(Hdim):
-    #         for k in range(Nt):
-    #             lowfloqarraytest[i,j,k] =               \
-    #                               lowfloq[k][i][0][j]*lowfloq[k][i][0][j].conj()
-    # amps = (1/Nt)*np.sum(lowfloqarraytest,axis = 2)
-    '''
-    Finding the FFT frequency peaks using np.where
-    '''
-    
-   
-    
-    indices = {}                                      #Initializing an empty dictionary to story the index of the peak harmonic for each lowering operator index
-    for i in range(Hdim):
-        for j in range(Hdim):
-            indices[i+Hdim*j] = np.where(           \
-                              np.round(abs(amps[i,j]),abs(math.floor(math.log10(opts.atol)))-1) >= opts.atol) #This loop stores the index of each peak harmonic in the dictionary, with the key of the dictionary being the operator matrix index.
-            indices[i+Hdim*j]=[x-len(tlist) if x>len(tlist)/2 else x for x in indices.get(i+Hdim*j)[0]]    
-    
-    
-    '''
-    The next step is to figure out which of these peaks has the largest absolute 
-       value, which informs where I truncate my sum over l. The loop below also finds
-       the "truer" value of l for each peak and uses that for the comparison. E.g. if
-       the FFT has 500 points and a peak has index 499, its actual index is [-2], giving
-       |l| = 2, NOT |l| = 499
-    '''
-   
-    lmax = []                                         #Creating an empty array to hold the absolute value of the index of each peak
-    for i in range(Hdim):
-        for j in range(Hdim):
-            try:
-                index = np.where(np.abs(indices[i+Hdim*j]) == np.amax(np.abs(indices[i+Hdim*j])))
-                lmax.append(abs(indices[i+Hdim*j][index[0][0]]))
-            except ValueError:
-                lmax.append(0)
-    lmax = np.amax(lmax)
-    
-    return amps,lmax
+    #         if amps[i,j] < 1:
+    #             amps[i,j] = 0
+    #         else:
+    #             pass
+            
+    return amps
 
 
 
@@ -888,7 +848,7 @@ def reorder(M,state0mat = None):
     
     CorrPerm = np.where(dots == np.amax(dots))[0][0]
     # v = M[:,list(itertools.permutations(range(0,shape(M)[0]),shape(M)[0]))[CorrPerm]]
-    v = np.sqrt(1/2)*np.array([[1,1,0,0],[1,-1,0,0],[0,0,1,1],[0,0,1,-1]])
+    v = np.sqrt(1/2)*np.array([[1,1,0,0],[-1,1,0,0],[0,0,1,1],[0,0,1,-1]])
         
 
 

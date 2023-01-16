@@ -71,7 +71,7 @@ class QSys:
         
         self.Lavg = (1/2)*(self.Las1.freq+self.Las2.freq) 
         self.beat  = abs(self.Las2.freq-self.Las1.freq )                             #beat frequency, difference between offresonant laser (L2) and resonant laser (L1)
-        self.T     = (2*np.pi/abs(self.beat/2))
+        self.T     = (2*np.pi/(self.beat/2))
         self.Delta = 2*np.pi*self.QD.states[-1]-self.Lavg                             #Average Detuning of the lasers from the excited state
 
         self.Hargs = {'w': (self.beat/2)}                                             #Characteristic frequency of the Hamiltonian is half the beating frequency of the Hamiltonian after the RWA. QuTiP needs it in Dictionary form.
@@ -101,17 +101,20 @@ class QSys:
         self.v = Qobj(v)
         
      
-            
         # H = [self.v.dag()*(self.AtomHam()+self.ZHam())*self.v,                                                    \
-        #     [self.v.dag()*self.LasHam()[0]*self.v,'exp(1j * w * t )'],                    \
-        #     [self.v.dag()*self.LasHam()[1]*self.v, 'exp(-1j * w * t )']]                  #Full Hamiltonian in string format, a form acceptable to QuTiP
+            # [self.v.dag()*self.LasHam()[0]*self.v,'exp(1j * w * t )'],                    \
+            # [self.v.dag()*self.LasHam()[1]*self.v, 'exp(-1j * w * t )']]                  #Full Hamiltonian in string format, a form acceptable to QuTiP
+       
         
         
         H = [(self.AtomHam()+self.ZHam()),                                                    
             [self.LasHam()[0],'exp(1j * w * t )'],                    
             [self.LasHam()[1], 'exp(-1j * w * t )']]   
             
-         
+        
+        
+        
+        
         return H
   
     
@@ -173,7 +176,7 @@ class QSys:
                     '''
                     Right now, I'm adding the rounding in the line directly below as a patch
                     
-                    Because f0 function can't take degenerate manifolds (with or without a magnetic field!), I add something like ~1/1000 of a GHz 
+                    Because f0 function can't take degenerate manifolds (without a magnetic field!), I add something like ~1/1000 of a GHz 
                     detuning to the second manifold.
                     
                     Empirically, it lookds like that doesn't do anything negative at all to the resulting spectra, though that nondegenaracy then
@@ -185,13 +188,7 @@ class QSys:
                     from the second entry is less than 1%. If it is, magnetic field. Otherwise ignore it. THIS IS STILL NOT A FULL FIX FENTON. YOU NEED TO FIX 
                     FMODES SO IT DOESN'T FUCK UP WITH DEGENERATE MANIFOLDS. THIS IS JUST A BETTER STOPGAP
                     '''
-                    if self.AtomHam()[i,i] == 0:
-                        if self.AtomHam()[j,j] == 0:
-                            self.ZHammy[i,i] = -1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
-                            self.ZHammy[j,j] =  1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
-                            self.ZHammy[i,j] = self.ZHammy[j,i] = (1/2)*self.Bfield.Bvec[0]*self.QD.gfactors[Count][0]
-                            Count += 1
-                    elif 100*(abs(self.AtomHam()[i,i]-self.AtomHam()[j,j])/abs(self.AtomHam()[i,i])) <= 1 :
+                    if abs(self.AtomHam()[i,i]-self.AtomHam()[j,j]) <= 1e-4 or 100*(abs(self.AtomHam()[i,i]-self.AtomHam()[j,j])/abs(self.AtomHam()[i,i])) <= 1 :
                         self.ZHammy[i,i] = -1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
                         self.ZHammy[j,j] =  1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
                         self.ZHammy[i,j] = self.ZHammy[j,i] = (1/2)*self.Bfield.Bvec[0]*self.QD.gfactors[Count][0]
@@ -234,9 +231,9 @@ class QSys:
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
         
-        f0,qe,f_modes_table_t,fstates,fstatesct= esm.PrepWork(self.Ham(),self.T,self.Hargs,tlist,taulist, opts = opts)
-        self.f0 = np.stack([i.full() for i in f0])
-        self.qe = qe
+        f0,qe,f_modes_list_one_period,fstates,fstatesct= esm.PrepWork(self.Ham(),self.T,self.Hargs,tlist,taulist, opts = opts)
+        self.f0 = np.hstack([i.full() for i in f0])
+        
         print('found f0, qe, fstates')
         
         '''
@@ -249,12 +246,9 @@ class QSys:
         # if self.Bfield != None:
         #     self.LowOp.matT = self.v.dag()*(self.LowOp.mat)*self.v
             
-        amps, lmax = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.mat ,f_modes_table_t = f_modes_table_t, opts = opts)
-
+        amps = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.mat ,fmodeslist = f_modes_list_one_period, opts = opts)
         
-        print('found lmax =', lmax)
-        
-        Rdic = esm.Rt(qe,amps,lmax,self.LowOp.mag,self.beat,time_sense )
+        Rdic = esm.Rt(qe,amps,self.LowOp.mag,self.beat,time_sense )
         self.Rdic = Rdic
         
         
@@ -271,24 +265,19 @@ class QSys:
         Looping over detection polarizations, to hopefully make things faster
         '''
         excitevals = {}
-        self.test = {}
+        self.rhoss = {}
         for Ldx, Lowp in enumerate(LowOpDetList):
            
             '''
             Doing the raising and lowering operator transformations, to move them
                 into the Floquet basis for every t_inf+t
             '''
-            # # Also transforming the lowering operator into the new basis
-            # if self.Bfield != None:
-            #     Lowp = self.v.dag()*Lowp*self.v
+            # Also transforming the lowering operator into the new basis
+            # if self.Bfield != None:           
+                # Lowp = self.v.dag()*Lowp*self.v
                 
-            
-            lofloq = fstatesct @ (Lowp).full() @ fstates
-            hifloq = np.transpose(lofloq.conj(),axes=(0,2,1)) 
-            
-            pop_op = hifloq @ lofloq
-            
-           
+            pop_op = fstatesct @ (Lowp.dag()*Lowp).full() @ fstates
+    
             
             # print('finished operator state conversions')
             
@@ -302,11 +291,13 @@ class QSys:
             rho01 = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
             
+            
+            
             t0 = taulist[-1]+taulist[1]
             rho00 = scp.integrate.solve_ivp(esm.rhodot,
                                                    t_span = (0,t0),
                                                    y0=rho01                 ,
-                                                   args=(Rdic,self.beat)                 ,
+                                                   args=(Rdic,-self.beat)                 ,
                                                    # method='DOP853'         ,
                                                    t_eval=np.append(taulist,t0)          ,
                                                    rtol=opts.rtol               ,
@@ -322,13 +313,13 @@ class QSys:
         
        
             
-            # self.rhoss = np.reshape(rho00, (self.QD.Hdim,self.QD.Hdim),order='F')
-            Pop_t = [ (hifloq[i*PDM] @ lofloq[i*PDM])                       \
+            self.rhoss[detpols[Ldx]] = np.reshape(rho00, (self.QD.Hdim,self.QD.Hdim),order='F')
+            Pop_t = [ (pop_op[i*PDM])                       \
                           @ np.reshape(
                                 scp.integrate.solve_ivp(esm.rhodot,
                                                         t_span = (t0,t0+tlistprime[-1])  ,
                                                         y0=rho00                ,
-                                                        args=(Rdic,self.beat)               ,
+                                                        args=(Rdic,-self.beat)               ,
                                                         # method='DOP853'         ,
                                                         t_eval=(t0+tlistprime)            ,
                                                         rtol=opts.rtol               ,
@@ -365,8 +356,8 @@ class QSys:
         
         if opts == None:
             opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-12                                #Absolute tolerance
-            opts.rtol = 1e-12                                  #Relative tolerance
+            opts.atol = 1e-6                                  #Absolute tolerance
+            opts.rtol = 1e-8                                  #Relative tolerance
             opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
         
 
@@ -404,6 +395,10 @@ class QSys:
             
             lofloq = fstatesct @ (Lowp).full() @ fstates
             hifloq = np.transpose(lofloq.conj(),axes=(0,2,1)) 
+           
+            
+           
+            
            
             '''
                  This loop takes each array output by the solver,
@@ -541,7 +536,19 @@ class QSys:
         ax.set_title('FFT of Time dependent Lowering operator in Floquet Basis')   
     
     
-    
+    def TransitionEnergies(self):  
+        aa = self.Ham()
+        
+        
+        TransHam = np.zeros((self.QD.Hdim,self.QD.Hdim),dtype='complex')
+        N = len(self.QD.states)
+        for n in range(N):
+            TransHam[n,n] = self.QD.states[n]*(2*np.pi)
+        
+        TransMat = self.v.dag()*(Qobj(TransHam)+self.ZHam())*self.v
+        
+        
+        return np.array([TransMat[0,0],TransMat[1,1],TransMat[2,2],TransMat[3,3]])/(2*np.pi)
 
             
     
