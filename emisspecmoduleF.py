@@ -165,7 +165,7 @@ Below are some meatier functions used for time evolution purposes,
 primarily
 
 '''
-def PrepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
+def prepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
     """
     Internal Function for use in calculating time evolution with FLoquet Theory
 
@@ -207,10 +207,6 @@ def PrepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
     f0, qe = floquet_modes2( H, T,  args, sort = True, options = opts)
     _,CorrPerms = reorder(np.hstack([i.full() for i in f0]))
     
-    # f0 = [f0[i] for i in CorrPerms]
-    # qe = [qe[i] for i in CorrPerms]
-    
-    
 
     
     f_modes_table_t = floquet_modes_table2(     \
@@ -243,7 +239,7 @@ def PrepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
 
 
 
-def LTrunc(PDM,Nt,tlist,taulist,low_op,fmodeslist, opts = None):
+def floquet_fourier_amps(PDM,Nt,tlist,taulist,low_op,fmodeslist, opts = None):
     
     if opts == None:
         opts = Options()                                  #Setting up the options used in the mode and state solvers
@@ -274,24 +270,18 @@ def LTrunc(PDM,Nt,tlist,taulist,low_op,fmodeslist, opts = None):
     #Creating the empty array to hold the Fourier Amplitudes of each index at every harmonic
     amps0 = scp.fft.fft(lowfloqarray,axis=0) #This loop performs the FFT of each index of the Floquet mode basis lowering operator to find their harmonic amplitudes.
     
-    amps = np.sum((amps0 * amps0.conj()),axis=0)/len(tlist)
-    ampsr = np.sum((np.real(amps0))**2,axis=0)/len(tlist)
+    amps = np.sum((amps0),axis=0)/np.sqrt(len(tlist))
+    ampsr = np.sum((np.real(amps0)),axis=0)/len(tlist)
     
     
-    # for i in range(Hdim):
-    #     for j in range(Hdim):
-    #         if amps[i,j] < 1:
-    #             amps[i,j] = 0
-    #         else:
-    #             pass
-            
+     
     return amps
 
 
 
 
 
-def Rt(qe,amps,lmax,Gamma,beatfreq,time_sense=0):
+def floquet_rate_matrix(qe,amps,Gamma,beatfreq,time_sense=0):
     ##########################Solving the R(t) tensor#########################
     Hdim = len(qe)
     
@@ -299,18 +289,11 @@ def Rt(qe,amps,lmax,Gamma,beatfreq,time_sense=0):
     First, divide all quasienergies by omega to get everything in terms of omega. 
         This way, once I've figured out the result of the exponential term addition, 
         I can just multiply it all by w
-    '''
-    qw = []
-    for i in range(Hdim):                                     
-        qw.append(qe[i]/(beatfreq/2))                                       #Characteristic Time period of the Hamiltonian - defined with abs(beat/2) as beat/2 is negative. 
-
         
-    
-    '''    
     Defining the exponential sums in terms of w now to save space below
     '''
-    def delta(x,y):
-        return (qe[x]-qe[y])
+    def delta(a,ap,b,bp):
+        return ((qe[a]-qe[ap]) - (qe[b]-qe[bp]))/(beatfreq/2)
     
     '''
     Next step is to create the R matrix from the "good" values of the indices
@@ -322,100 +305,59 @@ def Rt(qe,amps,lmax,Gamma,beatfreq,time_sense=0):
         FLiME" OneNote page on my report tab. Too much to explain it here!
     
     '''
-      
- 
     
-    # at = [p for p in itertools.product(range(0,Hdim),repeat = 4)]
-    # bt = [p for p in itertools.product(range(-lmax,lmax+1),repeat = 2)]
-    testidx = [Hdx for Hdx in itertools.product(range(0,Hdim),repeat = 4)]  #All possible iterations of A,AP,B,BP
+    '''
+    Noteworthy for sum ordering purposes: itertools likes to iterate over the LAST thing first.
+        E.g. if you iterated over all combinations of a list of 4 numbers from 0-3, it would go
+        [0,0,0,0],[0,0,0,1],[0,0,0,2]...[0,0,1,0],[0,0,1,1],....[3,3,3,3]
+    '''
+    iterations_test_list = [Hdx for Hdx in itertools.product(range(0,Hdim),repeat = 4)]  #Iterating over all possible iterations of A,AP,B,BP
+    
+    '''
+    From here on out, I'll be using the same indices for everything:
+        
+    alpha = var_name[0]
+    alpha' = var_name[1]
+    beta= var_name[2]
+    beta' = var_name[3]
+    '''
     
     
-    TimeDepCoeffArray = [np.round(delta(index[0],index[2]) - delta(index[1],index[3]),14) for index in testidx] #time dependence of the Hamiltonian
     
-    ValidTimeDepIdx = (~ma.masked_greater(np.absolute(TimeDepCoeffArray),time_sense).mask).nonzero()[0] #Creates a list of the indices of the time dependence coefficient array whose entries are within the time dependence constraint time_sense
+    time_dependence_list = [delta(*test_itx) for test_itx in iterations_test_list]
+    # TimeDepCoeffArray = [np.round(delta(index[0],index[2]) - delta(index[1],index[3]),14) for index in testidx] #time dependence of the Hamiltonian
+    
+    valid_TDXs = (~ma.masked_greater(np.absolute(time_dependence_list),time_sense).mask).nonzero()[0] #Creates a list of the indices of the time dependence coefficient array whose entries are within the time dependence constraint time_sense
 
-    validdx = [tuple(testidx[i]) for i in ValidTimeDepIdx] #creates a list tuples that are the valid (a,b,ap,bp,l,lp) indices to construct R(t) with the given secular constraint
+    valid_time_dependence_summation_index_values = [tuple(iterations_test_list[valid_index]) for valid_index in valid_TDXs] #creates a list tuples that are the valid (a,b,ap,bp,l,lp) indices to construct R(t) with the given secular constraint
 
     
-    
-    Rdic = {} #Time to build R(t). Creating an empty dictionary.
-    for rdx,row in enumerate(validdx): #For every entry in the list of tuples, create R(t)
-        # a = row[0]
-        # b = row[2]
-        # ap = row[1]
-        # bp = row[3]
-        # l = row[4]
-        # lp = row[5]
-        #Below creates Rt[m+Hdim*n,p+Hdim*q] by doing a list comprehension to build the resulting R(t) as a column-stacked matrix, then reshaping it to the proper dimensions
-        Rt = np.reshape([
-                Gamma*amps[row[0],row[2]]*np.conj(amps[row[1],row[3]])   * 
-                    (     kron(m     ,row[0])*kron(n,row[1])*kron(p,row[2])*kron(q,row[3]) -        #First Term of the FLiME                        
-                    (1/2)*kron(row[0],row[1])*kron(m,row[3])*kron(p,row[2])*kron(q,n     ) - 
-                    (1/2)*kron(row[0],row[1])*kron(n,row[2])*kron(p,     m)*kron(q,row[3])) 
-                  for (m,n,p,q) in [row1 for row1 in itertools.product(range(0,Hdim),repeat = 4)]],                                                          #the order of n,m,p,q here is *very* important for some reason that I don't feel like investigating. Something something transpose
-              (Hdim**2,Hdim**2))
-                            
+    R_tensor_dictionary = {} #Time to build R(t). Creating an empty dictionary.
+    for vdx, vals in enumerate(valid_time_dependence_summation_index_values): #For every entry in the list of tuples, create R(t)
+        a  = vals[0]
+        ap = vals[1]
+        b  = vals[2]
+        bp = vals[3]
+        
+        R_slice = np.zeros((Hdim**2,Hdim**2),dtype = complex)  
+        for idx in np.ndindex(Hdim,Hdim,Hdim,Hdim): #iterating over the indices of R_slice to set each value. Should figure out something faster later
+            m = idx[0]
+            n = idx[1]
+            p = idx[2]
+            q = idx[3]
+            
+            R_slice[m+Hdim*n,p+Hdim*q] =                                       \
+                Gamma*amps[a,b]*np.conj(amps[ap,bp])*                          \
+                            ( kron(m,a)  * kron(n,ap) * kron(p,b) * kron(q,bp) \
+                       -(1/2)*kron(a,ap) * kron(m,bp) * kron(p,b) * kron(q,n)  \
+                       -(1/2)*kron(a,ap) * kron(n,b)  * kron(p,m) * kron(q,bp))
+        
         try:
-            Rdic[TimeDepCoeffArray[ValidTimeDepIdx[rdx]]] += Rt  #If this time-dependence entry already exists, add this "slice" to it
+            R_tensor_dictionary[time_dependence_list[valid_TDXs[vdx]]] += R_slice  #If this time-dependence entry already exists, add this "slice" to it
         except KeyError:
-            Rdic[TimeDepCoeffArray[ValidTimeDepIdx[rdx]]] =  Rt   #If this time-dependence entry doesn't already exist, make it
+            R_tensor_dictionary[time_dependence_list[valid_TDXs[vdx]]]  = R_slice   #If this time-dependence entry doesn't already exist, make it
     
-    return Rdic
-    #a=p[0],b=1,ap=2,bp=3,l=4,lp=5, n=6,m=7,p=8,q=9
-    
-    
-    
-    
-    # Rdic = {}
-    # #Setting the R matrix elements n+Hdim*m, p+Hdim*q
-    # for n in range(Hdim):
-    #     for m in range(Hdim):
-    #         for p in range(Hdim):
-    #             for q in range(Hdim):
-    #                 #Performing sums within each R matrix element
-    #                 for a in range(Hdim):
-    #                     for ap in range(Hdim):
-    #                         for b in range(Hdim):
-    #                             for bp in range(Hdim):
-    #                                 if np.round(abs(delta(a,b)-delta(ap,bp)),12) <= time_sense:
-                                        
-    #                                     #First Term of the FLiME
-    #                                     Rt = np.zeros((Hdim**2,Hdim**2),dtype=complex)
-    #                                     Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
-    #                                     amps[a,b]*np.conj(amps[ap,bp]) * \
-    #                                             kron(m,a)*kron(n,ap)*kron(p,b)*kron(q,bp)  
-                                        
-                                        
-                                        
-    #                                     #Second Term of the FLiME
-    #                                     Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
-    #                                     amps[a,b]*np.conj(amps[ap,bp]) * \
-    #                                             (-1/2)*kron(a,ap)*kron(m,bp)*kron(p,b)*kron(q,n)
-                                        
-                                        
-    #                                     #Third Term of the FLiME
-    #                                     Rt[m+Hdim*n,p+Hdim*q] += Gamma*\
-    #                                     amps[a,b]*np.conj(amps[ap,bp]) * \
-    #                                             (-1/2)*kron(a,ap)*kron(n,b)*kron(p,m)*kron(q,bp)
-                                        
-                                        
-    #                                     '''
-    #                                     Finally, For each index, I append the total R(t) of that
-    #                                         index to a dictionary. The key of the dictionary 
-    #                                         entries are actually the (pre omega multiplication)
-    #                                         time dependencies, which is convenient I think. This 
-    #                                         way, each index that satisfies the condition above 
-    #                                         is just appended to its appropriate time dependent
-    #                                         dictionary entry, with time dependence added below!
-                                            
-    #                                     '''
-
-    #                                     try:
-    #                                         Rdic[delta(a,b)-delta(ap,bp)] += Rt
-    #                                     except KeyError:
-    #                                         Rdic[delta(a,b)-delta(ap,bp)] = Rt   
-                                            
-    # return Rdic
+    return R_tensor_dictionary
 
 '''
 Creating a function that takes the Rdictionary, multiples each key by its associated 
@@ -429,7 +371,7 @@ def rhodot(t,p,Rdic,beatfreq,):
     Hdim = np.shape(p)[0]
     R = np.zeros((Hdim,Hdim),dtype=complex)
     for idx, targ in enumerate(Rdic.keys()):
-        R += Rdic[targ]*np.exp(1j*targ* beatfreq/2*t)
+        R += Rdic[targ]*np.exp(1j*targ* (beatfreq/2)*t)
     R1 = (R)@p
     
     return R1
