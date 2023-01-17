@@ -205,7 +205,7 @@ class QSys:
     Various time evolution methods below
     '''
     
-    def ExciteSpec(self,Nt,tau,rho0,time_sense = 0,PDM = 1,detpols = np.array([None,None,None]),opts = None):       
+    def ExciteSpec(self,Nt,tau,rho0,time_sensitivity = 0,Point_Density_Multiplier = 1,detpols = np.array([None,None,None]),opts = None):       
             ############### Time evolving rho0 with solve_ivp#########################
         
         
@@ -219,44 +219,34 @@ class QSys:
         
         
         
-        Nt2 = Nt*PDM                                        #Number of Points
+        Nt2 = Nt*Point_Density_Multiplier                                        #Number of Points
         timet = self.T                                      #Length of time of tlist defined to be one period of the system
         dt = timet/Nt2                                      #Time point spacing in tlist
         tlist = np.linspace(0, timet-dt, Nt2)               #Combining everything to make tlist
-        tlistprime = np.linspace(0,timet-(dt*PDM),Nt)
+        tlist_PDM = np.linspace(0,timet-(dt*Point_Density_Multiplier),Nt)
                                                             #Taulist Definition
-        Ntau = (Nt)*(tau)*PDM                                    
-        taume = ((Ntau/PDM)/Nt)*self.T                          
+        Ntau = (Nt)*(tau)*Point_Density_Multiplier                                    
+        taume = ((Ntau/Point_Density_Multiplier)/Nt)*self.T                          
         dtau = taume/Ntau                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
         
-        f0,qe,f_modes_list_one_period,fstates,fstatesct= esm.PrepWork(self.Ham(),self.T,self.Hargs,tlist,taulist, opts = opts)
-        self.f0 = np.hstack([i.full() for i in f0])
-        
-        print('found f0, qe, fstates')
-        
-        '''
-        '''
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist, opts = opts)
 
-        '''
-        '''
+        
+        print('found f0, qe, f_states_all_periods')
+        
 
         # # Also transforming the lowering operator into the new basis
         # if self.Bfield != None:
         #     self.LowOp.matT = self.v.dag()*(self.LowOp.mat)*self.v
             
-        amps = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.mat ,fmodeslist = f_modes_list_one_period, opts = opts)
+        lowop_floquet_fourier_amps = esm.floquet_fourier_amps(Point_Density_Multiplier,Nt,tlist_PDM,taulist,self.LowOp.mat ,fmodeslist = f_modes_list_one_period, opts = opts)
         
-        Rdic = esm.Rt(qe,amps,self.LowOp.mag,self.beat,time_sense )
-        self.Rdic = Rdic
-        
-        
-        '''
-        '''
+        Rdic = esm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps,self.LowOp.mag,self.beat,time_sensitivity )
         print('Built R(t)')
 
-        LowOpDetList =  esm.lowop_detpol_modifier(self.LowOp.mat,self.QD.dipoles,detpols)
+        lowop_detection_polarization_modified_list =  esm.lowop_detpol_modifier(self.LowOp.mat,self.QD.dipoles,detpols)
         print('set detection polarization')
         
 
@@ -265,8 +255,7 @@ class QSys:
         Looping over detection polarizations, to hopefully make things faster
         '''
         excitevals = {}
-        self.rhoss = {}
-        for Ldx, Lowp in enumerate(LowOpDetList):
+        for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
            
             '''
             Doing the raising and lowering operator transformations, to move them
@@ -276,81 +265,75 @@ class QSys:
             # if self.Bfield != None:           
                 # Lowp = self.v.dag()*Lowp*self.v
                 
-            pop_op = fstatesct @ (Lowp.dag()*Lowp).full() @ fstates
+            pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
     
             
-            # print('finished operator state conversions')
+            # print('finished operator state conversions') 
             
-            
-            '''
-                 This loop takes each array output by the solver,
-               AOPWSDJMB[AQWOPEIBMQ[Wp(eiv{poqI})]]
-            '''
-            # print('attempting to solve the IVP')   
-            
-            rho01 = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
+            rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
             
             
             
-            t0 = taulist[-1]+taulist[1]
-            rho00 = scp.integrate.solve_ivp(esm.rhodot,
-                                                   t_span = (0,t0),
-                                                   y0=rho01                 ,
-                                                   args=(Rdic,-self.beat)                 ,
-                                                   # method='DOP853'         ,
-                                                   t_eval=np.append(taulist,t0)          ,
-                                                   rtol=opts.rtol               ,
-                                                   atol=opts.atol).y[:,-1]                                                                 
+            steadystate_time = taulist[-1]+taulist[1]
+            rhoss_floquet = scp.integrate.solve_ivp(esm.rhodot                   ,
+                                                    t_span = (0,steadystate_time),
+                                                    y0=rho0_floquet              ,
+                                                    args=(Rdic,self.beat)        ,
+                                                    method='DOP853'              ,
+                                                    t_eval=np.append(taulist,steadystate_time) ,
+                                                    rtol=opts.rtol               ,
+                                                    atol=opts.atol).y[:,-1]                                                                 
             # print('finished solving the IVP/time evolving rho0')
             '''
-            Next step is to iterate this steady state rho_s forward in time. I'll choose the times
-            to be evenly spread out within T, the time scale of the Hamiltonian
+            Next step is to iterate this steady state rho_s forward in time by one period of the Hamiltonian for the purpose of time averaging the result. I'll choose the times
+            to be evenly spread out within T, the time scale of the Hamiltonian.
             
-            In this step I also multiply in the lowering operator in the Floquet STATE basis at the correct time
+            In this step I also multiply in the population operator in the Floquet STATE basis at the correct time, to get the un-time-averaged excitation spectra. Then I average the result over
+            the time axis and take the trace to get the population value (I think?) in the steady state.
             '''
             
         
        
             
-            self.rhoss[detpols[Ldx]] = np.reshape(rho00, (self.QD.Hdim,self.QD.Hdim),order='F')
-            Pop_t = [ (pop_op[i*PDM])                       \
+            # self.rhoss[detpols[Ldx]] = np.reshape(rhoss_floquet, (self.QD.Hdim,self.QD.Hdim),order='F')
+            excite_t = [ (pop_op[i*Point_Density_Multiplier])                       \
                           @ np.reshape(
-                                scp.integrate.solve_ivp(esm.rhodot,
-                                                        t_span = (t0,t0+tlistprime[-1])  ,
-                                                        y0=rho00                ,
-                                                        args=(Rdic,-self.beat)               ,
-                                                        # method='DOP853'         ,
-                                                        t_eval=(t0+tlistprime)            ,
-                                                        rtol=opts.rtol               ,
-                                                        atol=opts.atol).y[:,i]       ,
+                                scp.integrate.solve_ivp(esm.rhodot                       ,
+                                                        t_span = (steadystate_time,steadystate_time+tlist_PDM[-1])   ,
+                                                        y0=rhoss_floquet                 ,
+                                                        args=(Rdic,-self.beat)           ,
+                                                        method='DOP853'                  ,
+                                                        t_eval=(steadystate_time+tlist_PDM)            ,
+                                                        rtol=opts.rtol                   ,
+                                                        atol=opts.atol).y[:,i]           ,
                                         (self.QD.Hdim,self.QD.Hdim),order='F')  
                             for i in list(range(0,Nt))]
                 
             
             
-            PopAvg = np.average(Pop_t,axis=0)
+            average_excite = np.average(excite_t,axis=0)
             
-            excitevals[detpols[Ldx]] = np.trace(PopAvg,axis1=0,axis2=1)
+            excitevals[detpols[Ldx]] = np.trace(average_excite,axis1=0,axis2=1)
             
             print('Finished Detpol',detpols[Ldx])
             
         return  excitevals
     
-    def EmisSpec(self,Nt,tau,rho0,time_sense = 0,PDM = 1,detpols = np.array([None,None,None]), retg1 = 'False', opts = None):       
+    def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,Point_Density_Multiplier = 1,detpols = np.array([None,None,None]), retg1 = 'False', opts = None):       
         ############### Time evolving rho0 with solve_ivp#########################
         
         
         
         
-        Nt2 = Nt*PDM                                        #Number of Points
+        Nt2 = Nt*Point_Density_Multiplier                                        #Number of Points
         timet = self.T                                      #Length of time of tlist defined to be one period of the system
         dt = timet/Nt2                                      #Time point spacing in tlist
         tlist = np.linspace(0, timet-dt, Nt2)               #Combining everything to make tlist
-        tlistprime = np.linspace(0,timet-(dt*PDM),Nt)
+        tlist_PDM = np.linspace(0,timet-(dt*Point_Density_Multiplier),Nt)
                                                             #Taulist Definition
-        Ntau = (Nt)*(tau)*PDM                                    
-        taume = ((Ntau/PDM)/Nt)*self.T                          
+        Ntau = (Nt)*(tau)*Point_Density_Multiplier                                    
+        taume = ((Ntau/Point_Density_Multiplier)/Nt)*self.T                          
         dtau = taume/Ntau                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
@@ -362,17 +345,17 @@ class QSys:
         
 
    
-        f0,qe,f_modes_table_t,fstates,fstatesct= esm.PrepWork(self.Ham(),self.T,self.Hargs,tlist,taulist)
-        print('found f0, qe, fstates')
+        f0,qe,f_modes_table_t,f_states_all_periods,f_states_all_periods_conjt= esm.PrepWork(self.Ham(),self.T,self.Hargs,tlist,taulist)
+        print('found f0, qe, f_states_all_periods')
         
 
         
         
         
-        amps, lmax = esm.LTrunc(PDM,Nt,tlistprime,taulist,self.LowOp.mat ,f_modes_table_t = f_modes_table_t)
+        amps, lmax = esm.LTrunc(Point_Density_Multiplier,Nt,tlist_PDM,taulist,self.LowOp.mat ,f_modes_table_t = f_modes_table_t)
         print('found lmax =', lmax)
         
-        Rdic = esm.Rt(qe,amps,lmax,self.LowOp.mag,self.beat,time_sense )
+        Rdic = esm.Rt(qe,amps,lmax,self.LowOp.mag,self.beat,time_sensitivity )
         print('Built R(t)')
 
         LowOpDetList =  esm.lowop_detpol_modifier(self.LowOp.mat,self.QD.dipoles,detpols)
@@ -393,7 +376,7 @@ class QSys:
             '''
            
             
-            lofloq = fstatesct @ (Lowp).full() @ fstates
+            lofloq = f_states_all_periods_conjt @ (Lowp).full() @ f_states_all_periods
             hifloq = np.transpose(lofloq.conj(),axes=(0,2,1)) 
            
             
@@ -408,13 +391,13 @@ class QSys:
             
             rho01 = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
-            t0 = taulist[-1]+taulist[1]
+            steadystate_time = taulist[-1]+taulist[1]
             rho00 = scp.integrate.solve_ivp(esm.rhodot,
-                                                   t_span = (0,t0),
+                                                   t_span = (0,steadystate_time),
                                                    y0=rho01                 ,
                                                    args=(Rdic,self.beat)                 ,
                                                    method='DOP853'         ,
-                                                   t_eval=np.append(taulist,t0)          ,
+                                                   t_eval=np.append(taulist,steadystate_time)          ,
                                                    rtol=opts.rtol               ,
                                                    atol=opts.atol).y[:,-1]                                                                 
             # print('finished solving the IVP/time evolving rho0')
@@ -426,14 +409,14 @@ class QSys:
             '''
             
         
-            Bstates = [ lofloq[i*PDM]                       \
+            Bstates = [ lofloq[i*Point_Density_Multiplier]                       \
                           @ np.reshape(
                                 scp.integrate.solve_ivp(esm.rhodot,
-                                                        t_span = (t0,t0+tlistprime[-1])  ,
+                                                        t_span = (steadystate_time,steadystate_time+tlist_PDM[-1])  ,
                                                         y0=rho00                ,
                                                         args=(Rdic,self.beat)               ,
                                                         method='DOP853'         ,
-                                                        t_eval=(t0+tlistprime)            ,
+                                                        t_eval=(steadystate_time+tlist_PDM)            ,
                                                         rtol=opts.rtol              ,
                                                         atol=opts.atol).y[:,i]       ,
                                         (self.QD.Hdim,self.QD.Hdim),order='F')  
@@ -452,7 +435,7 @@ class QSys:
             # print('Starting A States')
             for tdx, Bstate1 in enumerate(Bstates): #First for loop to find the tau outputs for each t value
                 #New "starting time"
-                t1 = t0+tlistprime[tdx]
+                t1 = steadystate_time+tlist_PDM[tdx]
                 
                 # if not (tdx+1)%10 or not (tdx+1)%len(Bstates):
                 # print('Filling column',tdx+1,'of',len(Bstates))
@@ -470,7 +453,7 @@ class QSys:
                 STOP CHANGING THE ORDER OF THE TRANSPOSE FENTON. IT ISN'T GOING TO FIX IT
                 TIMES I WAS WEAK: 13
                 '''
-                AstatesUnAv[tdx,...] = hifloq[(PDM*tdx):(len(taulist)+PDM*tdx)] @ TauBSEvol
+                AstatesUnAv[tdx,...] = hifloq[(Point_Density_Multiplier*tdx):(len(taulist)+Point_Density_Multiplier*tdx)] @ TauBSEvol
             # print('found unaveraged A-States')   
             '''
             Okay so the output matrix from above is a bunch of 2x2 density matrices
@@ -497,7 +480,7 @@ class QSys:
         elif retg1 == 'True':
             return Z,g1dic
  
-    def loFFTplot(self,low_op,PDM,Nt):  
+    def loFFTplot(self,low_op,Point_Density_Multiplier,Nt):  
         
         timet = self.T                                     #Length of time of tlist defined to be one period of the system
         dt = timet/Nt                                      #Time point spacing in tlist
@@ -509,7 +492,7 @@ class QSys:
         lowfloq = []                           #Defining an empty matrix to store the lowering operator in the Floquet mode basis for every time t in tlist
         for idx in range(Nt):
             lowfloq.append(low_op.transform( \
-                                            f_modes_table_t[idx*PDM])) #For every time t in tlist, transform the lowering operator to the Floquet mode basis using the Floquet mode table
+                                            f_modes_table_t[idx*Point_Density_Multiplier])) #For every time t in tlist, transform the lowering operator to the Floquet mode basis using the Floquet mode table
                 
 
         '''

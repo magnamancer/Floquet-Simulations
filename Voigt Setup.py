@@ -16,7 +16,7 @@ from qutip import *
 Defining the Dot
 '''
 norm = np.sqrt(2)
-states = [0,0,280,280] #Resonance arbitrarily decided
+states = [0,0,280,280+1e-7] #Resonance arbitrarily decided
 dipole = {(0,2):(1/norm,-1j/norm,0),(1,3):(1/norm,1j/norm,0)}
 gfactors = [[0.5,0],[-0.24,-0]] #Parallel parts (first one in each tuple) From Ned's 2015 paper
 dot = FC.QD(4,states,dipole,gfactors)
@@ -74,8 +74,8 @@ LP = {
 
 
 
-tau = 5 #Length of time to go forward, in units of T, the system Frequency
-Nt = 2**5 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
+tau = 100 #Length of time to go forward, in units of T, the system Frequency
+Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
@@ -136,10 +136,10 @@ for idz, val in enumerate(P_array):
 
     # spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
 
-    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0, detpols = ['X','Y','SP','SM'])
+    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00, Point_Density_Multiplier = PDM,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
     # test.append(Exp.Ham()[0].full())
-    testX.append(Exp.rhoss['X'])
-    testY.append(Exp.rhoss['Y'])
+    # testX.append(Exp.rhoss['X'])
+    # testY.append(Exp.rhoss['Y'])
 
 
     # #For ExciteSpec
