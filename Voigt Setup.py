@@ -74,23 +74,24 @@ LP = {
 
 
 
-tau = 100 #Length of time to go forward, in units of T, the system Frequency
+tau = 20 #Length of time to go forward, in units of T, the system Frequency
 Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
 
-point_spacing = 0.0001
-detuning0 = -.00
+point_spacing = 0.0005
+detuning0 = -.005
 
 
-power_range = 51
+power_range = 11
 P_array = np.zeros(power_range)
 for i in range(power_range):
     P_array[i]=(((i*1)+0))
     
-testY = [] 
-testX = []
+testf0 = [] 
+testqe = []
+test = []
 Bpower = 6e-2  
 for idz, val in enumerate(P_array):
     print('working on spectra',idz+1,'of',len(P_array))
@@ -100,7 +101,7 @@ for idz, val in enumerate(P_array):
     ''' 
     Lpower = 2*np.pi*0.001
     
-    Lpol = 'D'
+    Lpol = 'Y'
     
     detuning = detuning0+point_spacing*val
     Lfreq = 2*np.pi*(280+detuning)
@@ -126,20 +127,20 @@ for idz, val in enumerate(P_array):
     
 
     if idz == 0:
-        omega_array = esm.freqarray(Exp.T,Nt,tau,PDM = PDM)  
+        omega_array = esm.freqarray(Exp.T,Nt,tau)  
         Transitions = Exp.TransitionEnergies()
-        transX1=(abs(Transitions[0]-Transitions[2]))
-        transX2=(abs(Transitions[1]-Transitions[3]))
-        transY1=(abs(Transitions[0]-Transitions[3]))
-        transY2=(abs(Transitions[1]-Transitions[2]))
+        transX1=(abs(Transitions[2]-Transitions[0]))
+        transX2=(abs(Transitions[3]-Transitions[1]))
+        transY1=(abs(Transitions[2]-Transitions[1]))
+        transY2=(abs(Transitions[3]-Transitions[0]))
     
 
     # spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00, PDM = PDM,time_sense=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
 
-    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00, Point_Density_Multiplier = PDM,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
-    # test.append(Exp.Ham()[0].full())
-    # testX.append(Exp.rhoss['X'])
-    # testY.append(Exp.rhoss['Y'])
+    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
+    test.append(Exp.amps)
+    
+    
 
 
     # #For ExciteSpec
@@ -176,13 +177,16 @@ for idz, val in enumerate(P_array):
     # ZMavg.append(np.average(ZM[-1]))
     
 
-   
-        
 
 
+# #Appending the steadystate dictionary list together
+# D3 = {'X':[],'Y':[],'SP':[],'SM':[],}
+# for Dic in test:
+#     for key in Dic:
+#             D3[key].append(Dic[key])  #If this time-dependence entry already exists, add this "slice" to it
 
-
- 
+# xx = np.stack(D3['X'])
+# yy = np.stack(D3['Y']) 
 
 
 # # For plotting individual spectra
@@ -301,23 +305,23 @@ ax[0,0].legend(['NoPol','x','y'])
 ax[0,0].set_ylabel("Average value of Spectrum") 
 ax[0,0].axvline(x=transX1-280)
 # ax[0,0].axvline(x=transX2-280)
-ax[0,0].axvline(x=transY1-280)
-# ax[0,0].axvline(x=transY2-280)
+# ax[0,0].axvline(x=transY1-280)
+ax[0,0].axvline(x=transY2-280)
 
-#First plot to see how the linear polarizations works out
-ax[0,1].plot(Z0Lavg, color = 'k' ) #Plokktting the dirint result for comparison
-ax[0,1].plot(ZXavg, color = 'slateblue', linestyle = 'dashed')
-ax[0,1].plot(ZYavg, color = 'lightsteelblue' )
-ax[0,1].legend(['NoPol','x','y'])
-ax[0,1].set_ylabel("Average value of Spectrum") 
-
-
-# #Second plot to look at circular polarizations
-# ax[0,1].plot(  detuning0+P_array*point_spacing, Z0Cavg, color = 'k' ) #Plokktting the dirint result for comparison
-# ax[0,1].plot(detuning0+P_array*point_spacing, ZPavg, color = 'navajowhite')
-# ax[0,1].plot(detuning0+P_array*point_spacing, ZMavg, color = 'orangered' , linestyle = 'dashed')
-# ax[0,1].legend(['NoPol','SP','SM'])
+# #First plot to see how the linear polarizations works out
+# ax[0,1].plot(Z0Lavg, color = 'k' ) #Plokktting the dirint result for comparison
+# ax[0,1].plot(ZXavg, color = 'slateblue', linestyle = 'dashed')
+# ax[0,1].plot(ZYavg, color = 'lightsteelblue' )
+# ax[0,1].legend(['NoPol','x','y'])
 # ax[0,1].set_ylabel("Average value of Spectrum") 
+
+
+#Second plot to look at circular polarizations
+ax[0,1].plot(  detuning0+P_array*point_spacing, Z0Cavg, color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,1].plot(detuning0+P_array*point_spacing, ZPavg, color = 'navajowhite')
+ax[0,1].plot(detuning0+P_array*point_spacing, ZMavg, color = 'orangered' , linestyle = 'dashed')
+ax[0,1].legend(['NoPol','SP','SM'])
+ax[0,1].set_ylabel("Average value of Spectrum") 
 
 #Third for linear percent deviation
 ax[1,0].plot(  detuning0+P_array*point_spacing, np.array(Z0Lavg)/np.array(Z0Lavg), color = 'k' ) #Plokktting the dirint result for comparison

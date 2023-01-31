@@ -165,7 +165,7 @@ Below are some meatier functions used for time evolution purposes,
 primarily
 
 '''
-def prepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
+def prepWork(H,T,args,tlist,taulist=None, opts = None):
     """
     Internal Function for use in calculating time evolution with FLoquet Theory
 
@@ -198,40 +198,61 @@ def prepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
     Hdim = np.shape(H[0])[0]
     
     
-    
-    steadystate_time = taulist[-1]+taulist[1]  #The leng of time Tau forward for which the system is being evolved
+    # Setting useful constants to be used in a few lines
+    steadystate_time = taulist[-1]+taulist[1]  #The length of time Tau forward for which the system is being evolved
+    tau = int(np.ceil((steadystate_time)/T))
     time_evolution_t_points = np.concatenate((taulist, steadystate_time+tlist)) #The times over which I'll need to solve the lowering and raising operators. Runs from Tau to 2*Tau+T = 2*(N*T)+T=T(2N+1)
     
     
     print('starting f0')
-    f0, qe = floquet_modes2( H, T,  args, sort = True, options = opts)
-    _,CorrPerms = reorder(np.hstack([i.full() for i in f0]))
+    #Solving for the initial modes and quasienergies given by f0,qe respectively
+    f0, qe = floquet_modes2( H, T,  args, sort = False, options = opts)
+    
+    # aa,corrperms = reorder(np.hstack([i.full() for i in f0]))
     
 
-    
+    #Solving the mode table for a single period of driving, for use in transformations of the lowering operator and initial state
     f_modes_table_t = floquet_modes_table2(     \
                               f0,  qe, tlist, H,  T,    \
-                                  args, options = opts) #For use in transformations of the lowering operator and initial state
+                                  args, options = opts) 
     
     
     '''
     To form the Floquet State Table (in the form of a Numpy array), I:
-        1) Tile the mode table N times, where N is the number of whole (maybe partial in the future?) periods forward
-                in time defined by the time tau
-        2) Create an araay "qtime" of the product of every qe[i]*(Tau+t) to facilitate Numpy array multiplication, which I think is faster than list comprehensions? Not sure on that one.
-        3) Finally, every fmode array slice (for each time Tau+t) is multiplied directly (as opposed to Matmul)) by exp(-1j*qtime[i,k]) = exp(-1*qe[i]*)
+        1) First solve the Floquet modes for one period, 
+            1b) Stacking the list of lists into a list of arrays and then an overall numpy array
+        3) Tiling out the mode table for the full number of periods of evolution+1 for some extra room
+        3) For each time "t" and mode "mode," the complex exponential given by exp(-1j*qe[mode]*t) is multiplied into the corresponding
+            mode at time t to solve for the Floquet State basis over the full time period of evolution given by tau
+            
+    AS OF NOW THE TAULIST ONLY GOES FROM 0 TO TAU+T. THIS WORKS FOR EXCITESPEC BUT NOT EMISSPEC. DEAL WITH THIS WHEN YOU NEED TO, FENTON
     '''
     
     
-    f_modes_list_one_period = [[mode.full() for mode in modest] for modest in f_modes_table_t]
+    #Modes Table for a single period
+    f_modes_list_one_period = np.stack([np.hstack([i.full() for i in modest]) for modest in f_modes_table_t])
+
+    #Full time evaluation is tau number of periods +1 period for time averaging, so I need that many periods of modes
+    f_modes_list_full_time = np.tile(f_modes_list_one_period, (tau+1,1,1)) 
+    
+    f_modes_transpose = np.transpose(f_modes_list_full_time,(0,2,1))
+    
+    mode_exponentials = np.stack([np.stack([np.exp(-1j*qe[mode]*(t)) for mode in range(Hdim)]) for t in time_evolution_t_points])
     
     
-    tau = int((taulist[-1]+taulist[1])/T) #Full number of periods forward for time evaluation
-    f_modes_list_time_eval = f_modes_list_one_period*(tau+1) #Full time evaluation is tau number of periods +1 period for time averaging, so I need that many periods of modes
+    
+    f_states_transposed = np.stack([
+                            np.stack([
+                                        f_modes_transpose[t,mode]* mode_exponentials[t,mode]
+                                            for mode in range(Hdim)] )
+                                                for t in range(len(time_evolution_t_points))],axis=0)
     
     
-    fstates =  np.stack([np.hstack([f_modes_list_time_eval[t][mode]*np.exp(-1j*qe[mode]*(steadystate_time+time_evolution_t_points[t])) for mode in range(Hdim)]) for t in range(len(time_evolution_t_points))],axis=0)
+    fstates =  np.transpose(f_states_transposed,(0,2,1))
+   
     
+    
+    #Solving for the conjugate transpose of the states here, for ease of use in other areas
     fstatesct = np.transpose(fstates.conj(),axes=(0,2,1))
     
     return f0,qe,f_modes_list_one_period,fstates,fstatesct
@@ -239,7 +260,7 @@ def prepWork(H,T,args,tlist,taulist=None,rho0 = None, opts = None):
 
 
 
-def floquet_fourier_amps(PDM,Nt,tlist,taulist,low_op,fmodeslist, opts = None):
+def floquet_fourier_amps(Nt,tlist,taulist,low_op,fmodes_array, opts = None):
     
     if opts == None:
         opts = Options()                                  #Setting up the options used in the mode and state solvers
@@ -259,8 +280,9 @@ def floquet_fourier_amps(PDM,Nt,tlist,taulist,low_op,fmodeslist, opts = None):
     This function transforms the lowering operator into the Floquet mode basis
     '''
     
-    fmodes_array = np.stack([np.hstack(modes_t) for modes_t in fmodeslist],axis=0)
-    lowfloqarray = (np.transpose(fmodes_array.conj(),(0,2,1) ) @ low_op.full() @ fmodes_array)
+    fmodes_array_conjT = np.transpose(fmodes_array.conj(),(0,2,1) )
+    
+    lowfloqarray = (fmodes_array_conjT @ low_op.full() @ fmodes_array)
                
 
     
@@ -270,7 +292,7 @@ def floquet_fourier_amps(PDM,Nt,tlist,taulist,low_op,fmodeslist, opts = None):
     #Creating the empty array to hold the Fourier Amplitudes of each index at every harmonic
     amps0 = scp.fft.fft(lowfloqarray,axis=0) #This loop performs the FFT of each index of the Floquet mode basis lowering operator to find their harmonic amplitudes.
     
-    amps = np.sum((amps0),axis=0)/np.sqrt(len(tlist))
+    amps = np.sum((amps0),axis=0)/(len(tlist))
     ampsr = np.sum((np.real(amps0)),axis=0)/len(tlist)
     
     
@@ -323,9 +345,8 @@ def floquet_rate_matrix(qe,amps,Gamma,beatfreq,time_sense=0):
     '''
     
     
-    
+    #The asterisk is to unpack the tuple from iterations_test_list into arguments for the function
     time_dependence_list = [delta(*test_itx) for test_itx in iterations_test_list]
-    # TimeDepCoeffArray = [np.round(delta(index[0],index[2]) - delta(index[1],index[3]),14) for index in testidx] #time dependence of the Hamiltonian
     
     valid_TDXs = (~ma.masked_greater(np.absolute(time_dependence_list),time_sense).mask).nonzero()[0] #Creates a list of the indices of the time dependence coefficient array whose entries are within the time dependence constraint time_sense
 
@@ -348,9 +369,9 @@ def floquet_rate_matrix(qe,amps,Gamma,beatfreq,time_sense=0):
             
             R_slice[m+Hdim*n,p+Hdim*q] =                                       \
                 Gamma*amps[a,b]*np.conj(amps[ap,bp])*                          \
-                            ( kron(m,a)  * kron(n,ap) * kron(p,b) * kron(q,bp) \
-                       -(1/2)*kron(a,ap) * kron(m,bp) * kron(p,b) * kron(q,n)  \
-                       -(1/2)*kron(a,ap) * kron(n,b)  * kron(p,m) * kron(q,bp))
+                            ( kron(m, a) * kron(n,ap) * kron(p,b) * kron(q,bp) \
+                       -(1/2)*kron(a,ap) * kron(m,bp) * kron(p,b) * kron(q, n) \
+                       -(1/2)*kron(a,ap) * kron(n, b) * kron(p,m) * kron(q,bp))
         
         try:
             R_tensor_dictionary[time_dependence_list[valid_TDXs[vdx]]] += R_slice  #If this time-dependence entry already exists, add this "slice" to it
@@ -371,7 +392,7 @@ def rhodot(t,p,Rdic,beatfreq,):
     Hdim = np.shape(p)[0]
     R = np.zeros((Hdim,Hdim),dtype=complex)
     for idx, targ in enumerate(Rdic.keys()):
-        R += Rdic[targ]*np.exp(1j*targ* (beatfreq/2)*t)
+        R += Rdic[targ]*np.exp(-1j*targ* (beatfreq/2)*t)
     R1 = (R)@p
     
     return R1
@@ -388,10 +409,10 @@ Misc functions that I don't wanna catagorize rn
 '''
 
 
-def freqarray(T,Nt,tau,PDM = 1):       
+def freqarray(T,Nt,tau):       
     ############### Finding the fgrequency array over which to plot time evolution results #########################
-    Ntau = int((Nt)*(tau)*PDM)                                    
-    taume = ((Ntau/PDM)/Nt)*T                             
+    Ntau = int((Nt)*(tau))                                    
+    taume = ((Ntau)/Nt)*T                             
     dtau = taume/(Ntau)                                 
                                                                                                 
     omega_array = np.fft.fftshift(np.fft.fftfreq(Ntau,dtau))
@@ -790,7 +811,7 @@ def reorder(M,state0mat = None):
     
     CorrPerm = np.where(dots == np.amax(dots))[0][0]
     # v = M[:,list(itertools.permutations(range(0,shape(M)[0]),shape(M)[0]))[CorrPerm]]
-    v = np.sqrt(1/2)*np.array([[1,1,0,0],[-1,1,0,0],[0,0,1,1],[0,0,1,-1]])
+    v = np.sqrt(1/2)*np.array([[1,1,0,0],[1,-1,0,0],[0,0,1,1],[0,0,1,-1]])
         
 
 
