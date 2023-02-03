@@ -260,125 +260,142 @@ def prepWork(H,T,args,tlist,taulist=None, opts = None):
 
 
 
-def floquet_fourier_amps(Nt,tlist,taulist,low_op,fmodes_array, opts = None):
-    
-    if opts == None:
-        opts = Options()                                  #Setting up the options used in the mode and state solvers
-        opts.atol = 1e-8                                #Absolute tolerance
-        opts.rtol = 1e-8                                  #Relative tolerance
-        opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
-    
-    
-    Hdim = np.shape(low_op)[0]
-    
-    '''
-    I'm going to keep this as its own method for now, as it might be nice
-        to be bale to pull graphs of the FFT of the lowering operators when
-        desired.'
+def floquet_fourier_amps(Nt,tlist,taulist,bath_operator_list, floquet_modes_array, opts = None):
+    amplitude_list = []
+    for c_op in bath_operator_list:
+        if opts == None:
+            opts = Options()                                  #Setting up the options used in the mode and state solvers
+            opts.atol = 1e-8                                  #Absolute tolerance
+            opts.rtol = 1e-8                                  #Relative tolerance
+            opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
         
         
-    This function transforms the lowering operator into the Floquet mode basis
-    '''
-    
-    fmodes_array_conjT = np.transpose(fmodes_array.conj(),(0,2,1) )
-    
-    lowfloqarray = (fmodes_array_conjT @ low_op.full() @ fmodes_array)
-               
-
-    
-    '''
-    Performing the 1-D FFT
-    '''
-    #Creating the empty array to hold the Fourier Amplitudes of each index at every harmonic
-    amps0 = scp.fft.fft(lowfloqarray,axis=0) #This loop performs the FFT of each index of the Floquet mode basis lowering operator to find their harmonic amplitudes.
-    
-    amps = np.sum((amps0),axis=0)/(len(tlist))
-    ampsr = np.sum((np.real(amps0)),axis=0)/len(tlist)
-    
-    
-     
-    return amps
-
-
-
-
-
-def floquet_rate_matrix(qe,amps,Gamma,beatfreq,time_sense=0):
-    ##########################Solving the R(t) tensor#########################
-    Hdim = len(qe)
-    
-    '''
-    First, divide all quasienergies by omega to get everything in terms of omega. 
-        This way, once I've figured out the result of the exponential term addition, 
-        I can just multiply it all by w
+        Hdim = np.shape(c_op)[0]
         
-    Defining the exponential sums in terms of w now to save space below
-    '''
-    def delta(a,ap,b,bp):
-        return ((qe[a]-qe[ap]) - (qe[b]-qe[bp]))/(beatfreq/2)
-    
-    '''
-    Next step is to create the R matrix from the "good" values of the indices
-    Need to Condense these loop later with the functions Ned sent me in an email
-    
-    The loops over n,m,p,q are to set the n,m,p,q elements of the R matrix for a 
-        given time dependence. The other loops are to do sums within those elements.
-        The Full form of the FLime as written here can be found on the "Matrix Form 
-        FLiME" OneNote page on my report tab. Too much to explain it here!
-    
-    '''
-    
-    '''
-    Noteworthy for sum ordering purposes: itertools likes to iterate over the LAST thing first.
-        E.g. if you iterated over all combinations of a list of 4 numbers from 0-3, it would go
-        [0,0,0,0],[0,0,0,1],[0,0,0,2]...[0,0,1,0],[0,0,1,1],....[3,3,3,3]
-    '''
-    iterations_test_list = [Hdx for Hdx in itertools.product(range(0,Hdim),repeat = 4)]  #Iterating over all possible iterations of A,AP,B,BP
-    
-    '''
-    From here on out, I'll be using the same indices for everything:
-        
-    alpha = var_name[0]
-    alpha' = var_name[1]
-    beta= var_name[2]
-    beta' = var_name[3]
-    '''
-    
-    
-    #The asterisk is to unpack the tuple from iterations_test_list into arguments for the function
-    time_dependence_list = [delta(*test_itx) for test_itx in iterations_test_list]
-    
-    valid_TDXs = (~ma.masked_greater(np.absolute(time_dependence_list),time_sense).mask).nonzero()[0] #Creates a list of the indices of the time dependence coefficient array whose entries are within the time dependence constraint time_sense
-
-    valid_time_dependence_summation_index_values = [tuple(iterations_test_list[valid_index]) for valid_index in valid_TDXs] #creates a list tuples that are the valid (a,b,ap,bp,l,lp) indices to construct R(t) with the given secular constraint
-
-    
-    R_tensor_dictionary = {} #Time to build R(t). Creating an empty dictionary.
-    for vdx, vals in enumerate(valid_time_dependence_summation_index_values): #For every entry in the list of tuples, create R(t)
-        a  = vals[0]
-        ap = vals[1]
-        b  = vals[2]
-        bp = vals[3]
-        
-        R_slice = np.zeros((Hdim**2,Hdim**2),dtype = complex)  
-        for idx in np.ndindex(Hdim,Hdim,Hdim,Hdim): #iterating over the indices of R_slice to set each value. Should figure out something faster later
-            m = idx[0]
-            n = idx[1]
-            p = idx[2]
-            q = idx[3]
+        '''
+        I'm going to keep this as its own method for now, as it might be nice
+            to be able to pull graphs of the FFT of the lowering operators when
+            desired.
             
-            R_slice[m+Hdim*n,p+Hdim*q] =                                       \
-                Gamma*amps[a,b]*np.conj(amps[ap,bp])*                          \
-                            ( kron(m, a) * kron(n,ap) * kron(p,b) * kron(q,bp) \
-                       -(1/2)*kron(a,ap) * kron(m,bp) * kron(p,b) * kron(q, n) \
-                       -(1/2)*kron(a,ap) * kron(n, b) * kron(p,m) * kron(q,bp))
+            
+        This function transforms the lowering operator into the Floquet mode basis
+        '''
         
-        try:
-            R_tensor_dictionary[time_dependence_list[valid_TDXs[vdx]]] += R_slice  #If this time-dependence entry already exists, add this "slice" to it
-        except KeyError:
-            R_tensor_dictionary[time_dependence_list[valid_TDXs[vdx]]]  = R_slice   #If this time-dependence entry doesn't already exist, make it
+        floquet_modes_array_conjT = np.transpose(floquet_modes_array.conj(),(0,2,1) )
+        
+        c_op_Floquet_basis = (floquet_modes_array_conjT @ c_op @ floquet_modes_array)
+                   
     
-    return R_tensor_dictionary
+        
+        '''
+        Performing the 1-D FFT to find the Fourier amplitudes of this specific
+            lowering operator in the Floquet basis
+            
+        Divided by the length of tlist for normalization
+        '''
+        
+        c_op_Fourier_amplitudes = np.sum(scp.fft.fft(c_op_Floquet_basis,axis=0),axis=0)/(len(tlist))
+        amplitude_list.append(c_op_Fourier_amplitudes)
+        
+     
+    return amplitude_list
+
+
+
+
+
+def floquet_rate_matrix(qe,fourier_amplitude_matrices_list,c_op_rates,beatfreq,time_sense=0):
+    ##########################Solving the R(t) tensor#########################
+    Rate_matrix_list = []
+    for cdx, c_op_amplitude_matrix in enumerate(fourier_amplitude_matrices_list):
+        Hdim = len(qe)
+        
+        '''
+        First, divide all quasienergies by omega to get everything in terms of omega. 
+            This way, once I've figured out the result of the exponential term addition, 
+            I can just multiply it all by w
+            
+        Defining the exponential sums in terms of w now to save space below
+        '''
+        def delta(a,ap,b,bp):
+            return ((qe[a]-qe[ap]) - (qe[b]-qe[bp]))/(beatfreq/2)
+        
+        '''
+        Next step is to create the R matrix from the "good" values of the indices
+        Need to Condense these loop later with the functions Ned sent me in an email
+        
+        The loops over n,m,p,q are to set the n,m,p,q elements of the R matrix for a 
+            given time dependence. The other loops are to do sums within those elements.
+            The Full form of the FLime as written here can be found on the "Matrix Form 
+            FLiME" OneNote page on my report tab. Too much to explain it here!
+        
+        '''
+        
+        '''
+        Noteworthy for sum ordering purposes: itertools likes to iterate over the LAST thing first.
+            E.g. if you iterated over all combinations of a list of 4 numbers from 0-3, it would go
+            [0,0,0,0],[0,0,0,1],[0,0,0,2]...[0,0,1,0],[0,0,1,1],....[3,3,3,3]
+        '''
+        iterations_test_list = [Hdx for Hdx in itertools.product(range(0,Hdim),repeat = 4)]  #Iterating over all possible iterations of A,AP,B,BP
+        
+        '''
+        From here on out, I'll be using the same indices for everything:
+            
+        alpha = var_name[0]
+        alpha' = var_name[1]
+        beta= var_name[2]
+        beta' = var_name[3]
+        '''
+        
+        
+        #The asterisk is to unpack the tuple from iterations_test_list into arguments for the function
+        time_dependence_list = [delta(*test_itx) for test_itx in iterations_test_list]
+        
+        valid_TDXs = (~ma.masked_where(np.absolute(time_dependence_list)>time_sense,time_dependence_list).mask).nonzero()[0] #Creates a list of the indices of the time dependence coefficient array whose entries are within the time dependence constraint time_sense
+        
+    
+    
+        valid_time_dependence_summation_index_values = [tuple(iterations_test_list[valid_index]) for valid_index in valid_TDXs] #creates a list tuples that are the valid (a,b,ap,bp,l,lp) indices to construct R(t) with the given secular constraint
+    
+        
+        c_op_R_tensor = {} #Time to build R(t). Creating an empty dictionary.
+        for vdx, vals in enumerate(valid_time_dependence_summation_index_values): #For every entry in the list of tuples, create R(t)
+            a  = vals[0]
+            ap = vals[1]
+            b  = vals[2]
+            bp = vals[3]
+            
+            R_slice = np.zeros((Hdim**2,Hdim**2),dtype = complex)  
+            for idx in np.ndindex(Hdim,Hdim,Hdim,Hdim): #iterating over the indices of R_slice to set each value. Should figure out something faster later
+                m = idx[0]
+                n = idx[1]
+                p = idx[2]
+                q = idx[3]
+                
+                R_slice[m+Hdim*n,p+Hdim*q] =                                       \
+                    c_op_rates[cdx]*c_op_amplitude_matrix[a,b]*np.conj(c_op_amplitude_matrix[ap,bp])*                          \
+                                ( kron(m, a) * kron(n,ap) * kron(p,b) * kron(q,bp) \
+                           -(1/2)*kron(a,ap) * kron(m,bp) * kron(p,b) * kron(q, n) \
+                           -(1/2)*kron(a,ap) * kron(n, b) * kron(p,m) * kron(q,bp))
+            
+            try:
+                c_op_R_tensor[time_dependence_list[valid_TDXs[vdx]]] += R_slice  #If this time-dependence entry already exists, add this "slice" to it
+            except KeyError:
+                c_op_R_tensor[time_dependence_list[valid_TDXs[vdx]]]  = R_slice   #If this time-dependence entry doesn't already exist, make it
+    
+        Rate_matrix_list.append(c_op_R_tensor)
+        
+        
+    total_R_tensor = {}
+    for Rdic_idx in Rate_matrix_list:
+        for key in Rdic_idx:
+            try:
+                total_R_tensor[key] += Rdic_idx[key]  #If this time-dependence entry already exists, add this "slice" to it
+            except KeyError:
+                total_R_tensor[key]  = Rdic_idx[key]   #If this time-dependence entry doesn't already exist, make it
+        
+    
+    return total_R_tensor
 
 '''
 Creating a function that takes the Rdictionary, multiples each key by its associated 
@@ -810,8 +827,8 @@ def reorder(M,state0mat = None):
         dots = [sum([abs(np.dot(Mperm[:,i],state0mat[i])) for i in range(np.shape(M)[1])]) for Mperm in Mperms]
     
     CorrPerm = np.where(dots == np.amax(dots))[0][0]
-    # v = M[:,list(itertools.permutations(range(0,shape(M)[0]),shape(M)[0]))[CorrPerm]]
-    v = np.sqrt(1/2)*np.array([[1,1,0,0],[1,-1,0,0],[0,0,1,1],[0,0,1,-1]])
+    v = M[:,list(itertools.permutations(range(0,shape(M)[0]),shape(M)[0]))[CorrPerm]]
+    # v = np.sqrt(1/2)*np.array([[1,1,0,0],[1,-1,0,0],[0,0,1,1],[0,0,1,-1]])
         
 
 
