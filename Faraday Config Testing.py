@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors
 from qutip import *
+import time
 '''
 Defining the Dot
 '''
@@ -116,25 +117,23 @@ LP = {
 
 
 
-tau = 3000 #Length of time to go forward, in units of T, the system Frequency
+tau = 2000 #Length of time to go forward, in units of T, the system Frequency
 Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
 
 point_spacing = 0.0001
-detuning0 = -.003
+detuning0 = -.000
 
 
-power_range = 161
+power_range = 1
 P_array = np.zeros(power_range)
 for i in range(power_range):
     P_array[i]=(((i*1)+0))
     
-testf0 = [] 
-testqe = []
-test = []
-Bpower = 4e-2  
+start_time = time.time()
+Bpower = 0e-2  
 for idz, val in enumerate(P_array):
     print('working on spectra',idz+1,'of',len(P_array))
    
@@ -199,7 +198,6 @@ for idz, val in enumerate(P_array):
     # ZYavg.append(spec1['Y'])
     # ZPavg.append(spec1['SP'])
     # ZMavg.append(spec1['SM'])
-
     
 
 
@@ -225,8 +223,13 @@ for idz, val in enumerate(P_array):
     ZPavg.append(np.average(ZP[-1]))
     ZMavg.append(np.average(ZM[-1]))
     
+total_time = time.time()-start_time
 
-
+Z0Lavg = np.array(Z0Lavg)
+ZXavg = np.array(ZXavg)
+ZYavg = np.array(ZYavg)
+ZPavg = np.array(ZPavg)
+ZMavg = np.array(ZMavg)
 
 # # For plotting individual spectra
 # idx = 0                                            #Plotting the results!
@@ -276,58 +279,76 @@ for idz, val in enumerate(P_array):
 # fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}" )
 
 
+freqlims = [-0.02,0.01]
+
+
+frequency_range = (omega_array-(Exp.beat/2)/(2*np.pi))
+idx0 = np.where(abs(frequency_range-freqlims[0]) == np.amin(abs((frequency_range-freqlims[0] ))))[0][0]
+idxf = np.where(abs(frequency_range-freqlims[1]) == np.amin(abs((frequency_range-freqlims[1] ))))[0][0]
+
+plot_freq_range = frequency_range[idx0:idxf]
+Z0L_truncated = np.stack([Z0Li[idx0:idxf] for Z0Li in Z0L])
+ZX_truncated = np.stack([ZXi[idx0:idxf] for ZXi in ZX])
+ZY_truncated = np.stack([ZYi[idx0:idxf] for ZYi in ZY])
+ZP_truncated = np.stack([ZPi[idx0:idxf] for ZPi in ZP])
+ZM_truncated = np.stack([ZMi[idx0:idxf] for ZMi in ZM])
+
+
 
 
 clims = [1e-6,1e-2]
 Om1 = np.dot(       list(dot.dipoles.values())[0] ,Exp.Las2.E)
 # Plot on a colorplot
 fig, ax = plt.subplots(2,2)
-limits = [omega_array[0]-(Exp.beat/2)/(2*np.pi),\
-          omega_array[-1]-(Exp.beat/2)/(2*np.pi),\
+limits = [plot_freq_range[0],\
+          plot_freq_range[-1],\
           detuning0+P_array[0]*point_spacing,\
           detuning0+P_array[-1]*point_spacing]
     
-pos = ax[0,0].imshow(ZX,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[0,0].imshow(ZX_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
 ax[0,0].set_ylabel('$\Delta_1$ [THz]') 
 ax[0,0].set_title(F'detpol = X' )
 
-pos = ax[0,1].imshow(ZY,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[0,1].imshow(ZY_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
 ax[0,1].set_ylabel('$\Delta_1$ [THz]') 
 ax[0,1].set_title(F'detpol = Y' )
 
-pos = ax[1,0].imshow(ZP,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[1,0].imshow(ZP_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
 ax[1,0].set_xlabel('$\omega$ (THz)')
 ax[1,0].set_ylabel('$\Delta_1$ [THz]') 
 ax[1,0].set_title(F'detpol = SP' )
 
-pos = ax[1,1].imshow(ZM,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[1,1].imshow(ZM_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
 ax[1,1].set_xlabel('$\omega$ (THz)')
 ax[1,1].set_ylabel('$\Delta_1$ [THz]') 
 ax[1,1].set_title( 'detpol = SM' )
 
-fig.suptitle(F"Faraday Config with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}" )
+fig.suptitle(F"Pseudo-Faraday Config with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
 fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
+
+
+
 
 
 
 # Plot on a colorplot
 fig, ax = plt.subplots(1,1)
-limits = [omega_array[0]-(Exp.beat/2)/(2*np.pi),\
-          omega_array[-1]-(Exp.beat/2)/(2*np.pi),\
+limits = [plot_freq_range[0],\
+          plot_freq_range[-1],\
           detuning0+P_array[0]*point_spacing,\
           detuning0+P_array[-1]*point_spacing]
-pos = ax.imshow(Z0L,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax.imshow(Z0L_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims) 
 # ax.axvline(x=(0*Om1/(2*np.pi)), color='y', linestyle = 'solid',linewidth =3)
 # ax.axvline(x=(1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
 # ax.axvline(x=(-1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
 ax.set_xlabel('$\omega$ (THz)')
 ax.set_ylabel('$\Delta_1$ [THz]') 
-fig.suptitle(F"Faraday Config with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower} no detection polarization" )
+fig.suptitle(F"Pseudo-Faraday Config with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt} No detection polarization" )
 fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
 
 
@@ -390,7 +411,7 @@ ax[1,1].set_ylabel("Polarizations/NoPol")
 # # ax[1,1].set_ylabel("Percent Deviation") 
 
 
-fig.suptitle(F"Faraday Config with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}" )
+fig.suptitle(F"Pseudo-Faraday Config with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
 
 
 

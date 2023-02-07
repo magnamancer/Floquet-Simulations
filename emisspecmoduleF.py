@@ -189,9 +189,9 @@ def prepWork(H,T,args,tlist,taulist=None, opts = None):
     
     if opts == None:
         opts = Options()                                  #Setting up the options used in the mode and state solvers
-        opts.atol = 1e-6                                #Absolute tolerance
-        opts.rtol = 1e-8                                  #Relative tolerance
-        opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
+        opts.atol = 1e-4                                #Absolute tolerance
+        opts.rtol = 1e-6                                  #Relative tolerance
+        opts.nsteps= 10e+4                                #Maximum number of Steps                              #Maximum number of Steps
     
     
     #Making the assumption here that Hdim equals the number of rows of the time-independent Hamiltonian. Might not work always. Works now.
@@ -204,7 +204,7 @@ def prepWork(H,T,args,tlist,taulist=None, opts = None):
     time_evolution_t_points = np.concatenate((taulist, steadystate_time+tlist)) #The times over which I'll need to solve the lowering and raising operators. Runs from Tau to 2*Tau+T = 2*(N*T)+T=T(2N+1)
     
     
-    print('starting f0')
+    # print('starting f0')
     #Solving for the initial modes and quasienergies given by f0,qe respectively
     f0, qe = floquet_modes2( H, T,  args, sort = False, options = opts)
     
@@ -212,7 +212,7 @@ def prepWork(H,T,args,tlist,taulist=None, opts = None):
     
 
     #Solving the mode table for a single period of driving, for use in transformations of the lowering operator and initial state
-    f_modes_table_t = floquet_modes_table2(     \
+    f_modes_table_t = floquet_modes_table2(             \
                               f0,  qe, tlist, H,  T,    \
                                   args, options = opts) 
     
