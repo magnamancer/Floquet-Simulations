@@ -17,7 +17,7 @@ import time
 Defining the Dot
 '''
 norm = np.sqrt(2)
-states = [0,0,280,280+1e-7] #Resonance arbitrarily decided
+states = [0,0,2*np.pi*280,2*np.pi*(280+1e-7)] #Resonance arbitrarily decided
 dipole = {(0,2):(1/norm,-1j/norm,0),(1,3):(1/norm,1j/norm,0)}
 gfactors = [[0.5,0],[-0.24,-0]] #Parallel parts (first one in each tuple) From Ned's 2015 paper
 dot = FC.QD(4,states,dipole,gfactors)
@@ -48,7 +48,7 @@ c_op_rc = FC.LowOp(collapse_operator_rightcirc,manifolds_collapse_rate)
 
 
 
-electron_spin_flip_rate = manifolds_collapse_rate*(50/100)
+electron_spin_flip_rate = manifolds_collapse_rate*(100/100)
 
 collapse_operator_S_plus = \
                             np.array(
@@ -118,22 +118,22 @@ LP = {
 
 
 tau = 2000 #Length of time to go forward, in units of T, the system Frequency
-Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
+Nt = 2**3 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
 
 point_spacing = 0.0001
-detuning0 = -.000
+detuning0 = -.005
 
 
-power_range = 1
+power_range = 151
 P_array = np.zeros(power_range)
 for i in range(power_range):
     P_array[i]=(((i*1)+0))
     
 start_time = time.time()
-Bpower = 0e-2  
+Bpower = 4e-2  
 for idz, val in enumerate(P_array):
     print('working on spectra',idz+1,'of',len(P_array))
    
@@ -170,9 +170,9 @@ for idz, val in enumerate(P_array):
     '''
     rho00 = ((1/2)*(basis(4,0)*basis(4,0).dag()+basis(4,0)*basis(4,0).dag()))
     
-   
     
-    Exp = FC.QSys(dot,L2,L1,Bfield = B,c_op_list = collapse_operator_list)
+    
+    Exp = FC.QSys(dot,LasList = [L1,L2], Bfield = B,c_op_list = collapse_operator_list)
     
     
     if idz == 0:
@@ -279,7 +279,7 @@ ZMavg = np.array(ZMavg)
 # fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}" )
 
 
-freqlims = [-0.02,0.01]
+freqlims = [-0.01,0.02]#[omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]
 
 
 frequency_range = (omega_array-(Exp.beat/2)/(2*np.pi))
@@ -296,8 +296,7 @@ ZM_truncated = np.stack([ZMi[idx0:idxf] for ZMi in ZM])
 
 
 
-clims = [1e-6,1e-2]
-Om1 = np.dot(       list(dot.dipoles.values())[0] ,Exp.Las2.E)
+clims = [1e-7,1e-1]
 # Plot on a colorplot
 fig, ax = plt.subplots(2,2)
 limits = [plot_freq_range[0],\
@@ -411,7 +410,7 @@ ax[1,1].set_ylabel("Polarizations/NoPol")
 # # ax[1,1].set_ylabel("Percent Deviation") 
 
 
-fig.suptitle(F"Pseudo-Faraday Config with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
+fig.suptitle(F"Pseudo-Faraday Config Excitation Spectrum with $\Omega_1$ = 1 GHz {L2pol},$\Omega_2$ = 200 GHz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
 
 
 

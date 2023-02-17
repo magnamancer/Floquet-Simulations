@@ -54,7 +54,7 @@ c_op_lc = FC.LowOp(collapse_operator_leftcirc,manifolds_collapse_rate)
 c_op_rc = FC.LowOp(collapse_operator_rightcirc,manifolds_collapse_rate)
 
 
-electron_spin_flip_rate_percent = 50
+electron_spin_flip_rate_percent = 100
 electron_spin_flip_rate = manifolds_collapse_rate*(electron_spin_flip_rate_percent/100)
 
 collapse_operator_S_plus = \
@@ -142,7 +142,7 @@ for i in range(power_range):
 
 start_time = time.time()
 
-Bpower = 6e-2  
+Bpower = 0e-2  
 for idz, val in enumerate(P_array):
     print('working on spectra',idz+1,'of',len(P_array))
    
@@ -234,7 +234,7 @@ ax[1,1].set_xlabel('$\\tau$ [seconds]')
 ax[1,1].set_title(F'detpol = $\sigma_-$' )
 
 
-fig.suptitle(F"$g^{(2)}$($\\tau$) with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz,$\Omega_2$ = {P1} THz {L1pol},$\Delta_2$ = {ACdetune} THz B = {Bpower}, $e^-$ rate (% of spont emis rate) = {electron_spin_flip_rate_percent}%" )
+fig.suptitle(F"$g^{(2)}$($\\tau$) with $\Omega_1$/2$\pi$ = 1 GHz {L2pol}, $\Delta_1$/2$\pi$ = {detuning0+point_spacing*idx} GHz,$\Omega_2$/2$\pi$ = {P1} THz {L1pol},$\Delta_2$/2$\pi$ = {ACdetune} THz B = {Bpower}, $e^-$ rate (% of spont emis rate) = {electron_spin_flip_rate_percent}%" )
 
 
 

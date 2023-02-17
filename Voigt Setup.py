@@ -17,7 +17,7 @@ import time
 Defining the Dot
 '''
 norm = np.sqrt(2)
-states = [0,0,280,280+1e-7] #Resonance arbitrarily decided
+states = [0,0,2*np.pi*280,2*np.pi*(280+1e-7)] #Resonance arbitrarily decided
 dipole = {(0,2):(1/norm,-1j/norm,0),(1,3):(1/norm,1j/norm,0)}
 gfactors = [[0.5,0],[-0.24,-0]] #Parallel parts (first one in each tuple) From Ned's 2015 paper
 dot = FC.QD(4,states,dipole,gfactors)
@@ -48,7 +48,7 @@ c_op_rc = FC.LowOp(collapse_operator_rightcirc,manifolds_collapse_rate)
 
 
 
-electron_spin_flip_rate = manifolds_collapse_rate*(5/100)
+electron_spin_flip_rate = manifolds_collapse_rate*(50/100)
 
 collapse_operator_S_plus = \
                             np.array(
@@ -117,7 +117,7 @@ LP = {
 
 
 
-tau = 400 #Length of time to go forward, in units of T, the system Frequency
+tau = 40 #Length of time to go forward, in units of T, the system Frequency
 Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
@@ -130,27 +130,37 @@ detuning0 = -.005
 power_range = 101
 P_array = np.zeros(power_range)
 for i in range(power_range):
-    P_array[i]=(((i*1)+0))
+    P_array[i]=(((i*1)))
     
 
 start_time = time.time()
 
 Bpower = 6e-2  
 for idz, val in enumerate(P_array):
+   
     print('working on spectra',idz+1,'of',len(P_array))
    
+      
     '''
-    Defining the laser
+    Defining the lasers
     ''' 
-    Lpower = 2*np.pi*0.001
+    P2 = 0.001
+    P1 = 0.0
+    L2power = 2*np.pi*P2
+    L1power = 2*np.pi*P1
     
-    Lpol = 'D'
+    
+    L2pol = 'D'
+    L1pol = 'SM'
     
     detuning = detuning0+point_spacing*val
-    Lfreq = 2*np.pi*(280+detuning)
-   
+    ACdetune = -2
+    L2freq = 2*np.pi*(280+detuning)
+    L1freq = 2*np.pi*(280+ACdetune)
     
-    L2 = FC.Laser(Lpower,LP[Lpol],Lfreq) 
+    L1 = FC.Laser(L1power,LP[L1pol],L1freq)
+    L2 = FC.Laser(L2power,LP[L2pol],L2freq) 
+    
     
     
     '''
@@ -166,7 +176,7 @@ for idz, val in enumerate(P_array):
     
    
     
-    Exp = FC.QSys(dot,L2,Bfield = B,c_op_list = collapse_operator_list)
+    Exp = FC.QSys(dot,LasList = [L2] ,Bfield = B,c_op_list = collapse_operator_list)
     
 
     if idz == 0:
@@ -178,7 +188,7 @@ for idz, val in enumerate(P_array):
         transY2=(abs(Transitions[3]-Transitions[0]))
     
 
-    spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
+    spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'],retg1='True')
 
     # spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
     
@@ -222,106 +232,119 @@ for idz, val in enumerate(P_array):
 
 total_time = time.time()-start_time
 # # For plotting individual spectra
-# idx = 0                                            #Plotting the results!
+idx = 0                                            #Plotting the results!
 
 
-# # # For plotting Excitation Arrays
-# fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
+# # For plotting Excitation Arrays
+fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
+
+#First plot to see how the linear polarizations works out
+ax[0,0].semilogy( omega_array+(Exp.beat/(4*np.pi)),Z0L[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,0].semilogy(omega_array+(Exp.beat/(4*np.pi)), ZX[idx], color = 'slateblue')
+ax[0,0].semilogy(omega_array+(Exp.beat/(4*np.pi)), ZY[idx], color = 'navy',linestyle = 'dashed')
+ax[0,0].legend(['NoPol','x','y'])
+ax[0,0].set_xlabel('$\omega$ [THz]')
+ax[0,0].set_ylabel("Amplitude (arb)") 
+
+#Second plot to look at circular polarizations
+ax[0,1].semilogy( omega_array+(Exp.beat/(4*np.pi)),Z0C[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,1].semilogy(omega_array+(Exp.beat/(4*np.pi)), ZP[idx], color = 'green')
+ax[0,1].semilogy(omega_array+(Exp.beat/(4*np.pi)), ZM[idx], color = 'orangered',linestyle = 'dashed')
+ax[0,1].legend(['NoPol','SP','SM'])
+ax[0,1].set_xlabel('$\omega$ [THz]')
+ax[0,1].set_ylabel("Amplitude (arb)") 
 
 # #First plot to see how the linear polarizations works out
-# ax[0,0].semilogy( omega_array-(Exp.beat/(4*np.pi)),Z0L[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[0,0].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZX[idx], color = 'slateblue')
-# ax[0,0].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZY[idx], color = 'navy',linestyle = 'dashed')
-# ax[0,0].legend(['NoPol','x','y'])
-# ax[0,0].set_xlabel('$\omega$ [THz]')
-# ax[0,0].set_ylabel("Amplitude (arb)") 
+# ax[1,0].semilogy( omega_array-(Exp.beat/(4*np.pi)),abs(Z0L[idx]-Z0C[idx])*100, color = 'k' ) #Plokktting the dirint result for comparison
+# ax[1,0].legend(['Absolute percent deviation of Linear X+Y from circular SP+SM'])
+# ax[1,0].set_xlabel('$\omega$ [THz]')
+# ax[1,0].set_ylabel("Amplitude (arb)") 
 
-# #Second plot to look at circular polarizations
-# ax[0,1].semilogy( omega_array-(Exp.beat/(4*np.pi)),Z0C[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[0,1].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZP[idx], color = 'green')
-# ax[0,1].semilogy(omega_array-(Exp.beat/(4*np.pi)), ZM[idx], color = 'orangered',linestyle = 'dashed')
-# ax[0,1].legend(['NoPol','SP','SM'])
-# ax[0,1].set_xlabel('$\omega$ [THz]')
-# ax[0,1].set_ylabel("Amplitude (arb)") 
+#Third for linear percent deviation
+ax[1,0].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[1,0].plot(ZXg1[idx], color = 'slateblue', linestyle = 'dashed')
+ax[1,0].plot(ZYg1[idx], color = 'lightsteelblue' )
+ax[1,0].legend(['steps'])
+ax[1,0].set_ylabel("g1") 
 
-# # #First plot to see how the linear polarizations works out
-# # ax[1,0].semilogy( omega_array-(Exp.beat/(4*np.pi)),abs(Z0L[idx]-Z0C[idx])*100, color = 'k' ) #Plokktting the dirint result for comparison
-# # ax[1,0].legend(['Absolute percent deviation of Linear X+Y from circular SP+SM'])
-# # ax[1,0].set_xlabel('$\omega$ [THz]')
-# # ax[1,0].set_ylabel("Amplitude (arb)") 
-
-# #Third for linear percent deviation
-# ax[1,0].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[1,0].plot(ZXg1[idx], color = 'slateblue', linestyle = 'dashed')
-# ax[1,0].plot(ZYg1[idx], color = 'lightsteelblue' )
-# ax[1,0].legend(['steps'])
-# ax[1,0].set_ylabel("g1") 
-
-# #Fourth for circular percent deviation
-# ax[1,1].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
-# ax[1,1].plot(ZPg1[idx], color = 'green')
-# ax[1,1].plot(ZMg1[idx], color = 'orangered' , linestyle = 'dashed')
-# ax[1,1].legend(['NoPol','P','M'])
-# ax[1,1].set_xlabel('steps')
-# ax[1,1].set_ylabel("g1") 
+#Fourth for circular percent deviation
+ax[1,1].plot(Z0g1[idx], color = 'k' ) #Plokktting the dirint result for comparison
+ax[1,1].plot(ZPg1[idx], color = 'green')
+ax[1,1].plot(ZMg1[idx], color = 'orangered' , linestyle = 'dashed')
+ax[1,1].legend(['NoPol','P','M'])
+ax[1,1].set_xlabel('steps')
+ax[1,1].set_ylabel("g1") 
 
 
-# fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {Lpol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}, $\Tau$ = {tau}, Nt = {Nt}" )
+fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
 
+
+freqlims = [omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]#[-0.05,0.05]
+
+
+frequency_range = (omega_array-(Exp.beat/(4*np.pi)))
+idx0 = np.where(abs(frequency_range-freqlims[0]) == np.amin(abs((frequency_range-freqlims[0] ))))[0][0]
+idxf = np.where(abs(frequency_range-freqlims[1]) == np.amin(abs((frequency_range-freqlims[1] ))))[0][0]
+
+plot_freq_range = frequency_range[idx0:idxf]
+Z0L_truncated = np.stack([Z0Li[idx0:idxf] for Z0Li in Z0L])
+ZX_truncated = np.stack([ZXi[idx0:idxf] for ZXi in ZX])
+ZY_truncated = np.stack([ZYi[idx0:idxf] for ZYi in ZY])
+ZP_truncated = np.stack([ZPi[idx0:idxf] for ZPi in ZP])
+ZM_truncated = np.stack([ZMi[idx0:idxf] for ZMi in ZM])
 
 
 
-clims = [1e-6,1e-2]
-Om1 = np.dot(       list(dot.dipoles.values())[0] ,Exp.Las2.E)
+
+clims = [1e-6,1e-1]
+
 # Plot on a colorplot
 fig, ax = plt.subplots(2,2)
-limits = [omega_array[0]-(Exp.beat/2)/(2*np.pi),\
-          omega_array[-1]-(Exp.beat/2)/(2*np.pi),\
+limits = [plot_freq_range[0],\
+          plot_freq_range[-1],\
           detuning0+P_array[0]*point_spacing,\
           detuning0+P_array[-1]*point_spacing]
     
-pos = ax[0,0].imshow(ZX,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[0,0].imshow(ZX_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
 ax[0,0].set_ylabel('$\Delta_1$ [THz]') 
 ax[0,0].set_title(F'detpol = X' )
 
-pos = ax[0,1].imshow(ZY,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[0,1].imshow(ZY_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
-ax[0,1].set_ylabel('$\Delta_1$ [THz]') 
 ax[0,1].set_title(F'detpol = Y' )
 
-pos = ax[1,0].imshow(ZP,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[1,0].imshow(ZP_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
 ax[1,0].set_xlabel('$\omega$ (THz)')
 ax[1,0].set_ylabel('$\Delta_1$ [THz]') 
 ax[1,0].set_title(F'detpol = SP' )
 
-pos = ax[1,1].imshow(ZM,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax[1,1].imshow(ZM_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
 ax[1,1].set_xlabel('$\omega$ (THz)')
-ax[1,1].set_ylabel('$\Delta_1$ [THz]') 
+
 ax[1,1].set_title( 'detpol = SM' )
 
-fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {Lpol}, B = {Bpower}" )
+fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {L2pol}, B = {Bpower}" )
 fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
 
 
-#Plotting just the unpolarized case
-Om1 = np.dot(       list(dot.dipoles.values())[0] ,Exp.Las2.E)
+
 # Plot on a colorplot
 fig, ax = plt.subplots(1,1)
-limits = [omega_array[0]-(Exp.beat/2)/(2*np.pi),\
-          omega_array[-1]-(Exp.beat/2)/(2*np.pi),\
+limits = [plot_freq_range[0],\
+          plot_freq_range[-1],\
           detuning0+P_array[0]*point_spacing,\
           detuning0+P_array[-1]*point_spacing]
-pos = ax.imshow(Z0L,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+pos = ax.imshow(Z0L_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims) 
 # ax.axvline(x=(0*Om1/(2*np.pi)), color='y', linestyle = 'solid',linewidth =3)
 # ax.axvline(x=(1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
 # ax.axvline(x=(-1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
 ax.set_xlabel('$\omega$ (THz)')
 ax.set_ylabel('$\Delta_1$ [THz]') 
-ax.set_title(F'Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {Lpol}, detpol = None, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}' )
+ax.set_title(F'Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {L2pol}, detpol = None, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}' )
 fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
 
 
@@ -353,7 +376,6 @@ ax[0,1].plot(  detuning0+P_array*point_spacing, Z0Cavg, color = 'k' ) #Plokkttin
 ax[0,1].plot(detuning0+P_array*point_spacing, ZPavg, color = 'navajowhite')
 ax[0,1].plot(detuning0+P_array*point_spacing, ZMavg, color = 'orangered' , linestyle = 'dashed')
 ax[0,1].legend(['NoPol','SP','SM'])
-ax[0,1].set_ylabel("Average value of Spectrum") 
 
 #Third for linear percent deviation
 ax[1,0].plot(  detuning0+P_array*point_spacing, np.array(Z0Lavg)/np.array(Z0Lavg), color = 'k' ) #Plokktting the dirint result for comparison
@@ -369,7 +391,6 @@ ax[1,1].plot(detuning0+P_array*point_spacing, np.array(ZPavg)/np.array(Z0Cavg), 
 ax[1,1].plot(detuning0+P_array*point_spacing,np.array(ZMavg)/np.array(Z0Cavg), color = 'orangered' , linestyle = 'dashed')
 ax[1,1].legend(['NoPol','P','M'])
 ax[1,1].set_xlabel('$\Delta_1$ [THz]')
-ax[1,1].set_ylabel("Polarizations/NoPol") 
 
 # # #Third for linear percent deviation
 # # ax[1,0].plot(detuning0+P_array*point_spacing, ((np.array(Z0avg)-(np.array(ZXavg)+np.array(ZYavg)))/np.array(Z0avg))*100, color = 'k' ) #Plokktting the dirint result for comparison
@@ -384,7 +405,7 @@ ax[1,1].set_ylabel("Polarizations/NoPol")
 # # ax[1,1].set_ylabel("Percent Deviation") 
 
 
-fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {Lpol}, B = {Bpower}, $\tau$ = {tau}, Nt = {Nt}" )
+fig.suptitle(F"Voigt Config Excitation Spectrum with $\Omega_1$ = 1 GHz {L2pol}, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
 
 
 

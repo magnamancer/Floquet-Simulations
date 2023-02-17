@@ -52,33 +52,29 @@ class QD:
         return Qobj(sum([np.eye(1, self.Hdim * self.Hdim, k=(i) * self.Hdim + j).reshape(self.Hdim, self.Hdim) for i,j in self.dipoles]))
 
 class QSys:
-    def __init__(self,QD,Las1,Las2 = None, Bfield = None, c_op_list = None):
-        self.Las1 = Las1
-        self.Las2 = Las2
+    def __init__(self,QD,LasList =[], Bfield = None, c_op_list = None):
+        self.LasList = LasList
         self.Bfield = Bfield
         self.QD = QD
         self.c_op_list = c_op_list
-        
-        '''
-        Defining Useful Constants
-        '''
-        #WILL NEED TO FIND A WAY TO GENERALIZE DELTA LATER!!!!
-        if self.Las2 == None:
-            self.Las2 = FC.Laser(0,self.Las1.pol,self.Las1.freq*0.999974 )
+
+
+        if len(self.LasList) == 1:
+            freqspoof = self.LasList[0].freq*0.99997
+            self.Lavg = (1/2)*(freqspoof+self.LasList[0].freq)
+            self.beat  = abs(freqspoof-self.LasList[0].freq )
             
-        #This loop doesn't do anything but reorder the lasers to enforce some assumptions I make about the RWA form of the Hamiltonian
-        if self.Las1.freq > self.Las2.freq:
-            temp = self.Las1
-            self.Las1 = self.Las2
-            self.Las2 = temp
+        elif len(self.LasList) == 2:
+            self.Lavg = (1/2)*(self.LasList[0].freq+self.LasList[1].freq)
+            self.beat  = abs(self.LasList[1].freq-self.LasList[0].freq )
+            
         
         
         
-        
-        self.Lavg = (1/2)*(self.Las1.freq+self.Las2.freq) 
-        self.beat  = abs(self.Las2.freq-self.Las1.freq )                             #beat frequency, difference between offresonant laser (L2) and resonant laser (L1)
+         
+                                    
         self.T     = (2*np.pi/(self.beat/2))
-        self.Delta = 2*np.pi*self.QD.states[-1]-self.Lavg                             #Average Detuning of the lasers from the excited state
+        self.Delta = self.QD.states[-1]-self.Lavg                             #Average Detuning of the lasers from the excited state
 
         self.Hargs = {'w': (self.beat/2)}                                             #Characteristic frequency of the Hamiltonian is half the beating frequency of the Hamiltonian after the RWA. QuTiP needs it in Dictionary form.
        
@@ -136,27 +132,88 @@ class QSys:
     '''
     Creating a method to define the laser Hamiltonian(s) in the RWA
     '''
+   
+   
     def LasHam(self):
-
-        '''
-        Creating the Rabi Frequencies for use in the Laser Hamiltonians
-        '''
-        self.Om1 = {}
-        self.Om2 =  {}
-        self.Om1s = {} 
-        self.Om2s = {}
-        for idx,element in enumerate(self.QD.dipoles): 
-            d = basis(self.QD.Hdim,element[0])*basis(self.QD.Hdim,element[1]).dag()
-            self.Om1 [idx]   = np.dot(       self.QD.dipoles[element] ,self.Las1.E) * d                             #Rabi Frequency Omega_1
-            self.Om1s[idx]  = np.dot(np.conj(self.QD.dipoles[element]),np.conj(self.Las1.E)) * d.dag()                        #Rabi Frequency Omega_1 star
-            self.Om2 [idx]   = np.dot(       self.QD.dipoles[element] ,self.Las2.E) * d                            #Rabi Frequency Omega_2
-            self.Om2s[idx]  = np.dot(np.conj(self.QD.dipoles[element]),np.conj(self.Las2.E)) * d.dag()                       #Rabi Frequency Omega_2 star
         
         '''
-        Next, I define the forward and backward rotating terms
+        The first step is to define all of the Rabi frequencies
         '''
-        self.forwardrot  = (-1/2)*sum([x+y for (x,y) in zip(self.Om2.values(),self.Om1s.values())])
-        self.backwardrot = (-1/2)*sum([x+y for (x,y) in zip(self.Om1.values(),self.Om2s.values())])
+        rabi_freq = {}
+        rabi_freq_tilde = {}
+        for lasdx, Laser in enumerate(self.LasList):
+            for edx, dipole in enumerate(self.QD.dipoles): 
+                rabi_freq[edx,lasdx] = np.dot(self.QD.dipoles[dipole],Laser.E)
+                rabi_freq_tilde[edx,lasdx] = np.dot(self.QD.dipoles[dipole],np.conj(Laser.E))
+        
+        '''
+        Next I want to define the time-dependance of each Rabi frequency. Keep in mind that tilde terms have 
+            negative time dependance comapared to their un-tilde'd counterparts, Fenton
+        '''
+        laser_beat = {}  
+        laser_beat_tilde = {}          
+        for lasdx, Laser in enumerate(self.LasList):
+            laser_beat[lasdx] = Laser.freq-self.Lavg
+            laser_beat_tilde[lasdx] = -Laser.freq-self.Lavg
+        
+        
+        '''
+        Finding forward rotating terms by subtracting the beat frequency.
+            Anything that ends up at zero is a forward rotating term
+        '''
+        forward = []
+        for lasdx, key in enumerate(laser_beat):
+            for edx, moment in enumerate(self.QD.dipoles.keys()):
+                dipole_moment = moment
+                dip_mat = basis(self.QD.Hdim,dipole_moment[0])*basis(self.QD.Hdim,dipole_moment[1]).dag()
+                
+                if math.isclose(laser_beat[key] , self.beat/2,abs_tol = 1e-4):
+                   
+                    forward.append(((-1/2)*rabi_freq[edx,lasdx]*dip_mat).full())
+                 
+                if math.isclose(laser_beat_tilde[key] , self.beat/2,abs_tol = 1e-4):
+                    forward.append((-1/2)*rabi_freq_tilde[edx,lasdx]*dip_mat)
+        
+        
+        '''
+        Finding backward rotating terms by subtracting the -beat frequency.
+            Anything that ends up at zero is a backward rotating term
+        '''
+        backward = []
+        for lasdx, key in enumerate(laser_beat):
+            for edx, moment in enumerate(self.QD.dipoles.keys()):
+                dipole_moment = moment
+                dip_mat = basis(self.QD.Hdim,dipole_moment[0])*basis(self.QD.Hdim,dipole_moment[1]).dag()
+                
+                if math.isclose(laser_beat[key] , -self.beat/2,abs_tol = 1e-4):
+                   
+                    backward.append(((-1/2)*rabi_freq[edx,lasdx]*dip_mat).full())
+                 
+                if math.isclose(laser_beat_tilde[key] , -self.beat/2,abs_tol = 1e-4):
+                    backward.append((-1/2)*rabi_freq_tilde[edx,lasdx]*dip_mat)
+        
+        '''
+        Adding the conjugates to one another
+        '''
+        backward_appended = backward.copy()  
+        forward_appended  = forward.copy()  
+        for back_mat in backward:
+            forward_appended.append(back_mat.T.conj())
+        
+        for for_mat in forward:
+            backward_appended.append(for_mat.T.conj())
+        
+        
+        self.forwardrot  = sum(forward_appended )
+        self.backwardrot = sum(backward_appended)
+        
+        if not self.forwardrot.any():
+            self.forwardrot = np.zeros((self.QD.Hdim,self.QD.Hdim))
+        
+        if not self.backwardrot.any():
+            self.backwardrot = np.zeros((self.QD.Hdim,self.QD.Hdim))
+            
+       
         
         return Qobj(np.round(self.forwardrot,10)), Qobj(np.round(self.backwardrot,10))
 
@@ -174,7 +231,7 @@ class QSys:
             for m in range(n+1,N):
                 if C[n,m] != 0:
                     eta[m] = eta[n]+self.Lavg
-            self.AtomHammy[n,n] = self.QD.states[n]*(2*np.pi)-eta[n]
+            self.AtomHammy[n,n] = self.QD.states[n]-eta[n]
         
         return Qobj(np.round(self.AtomHammy,10))
     
@@ -203,10 +260,11 @@ class QSys:
                     from the second entry is less than 1%. If it is, magnetic field. Otherwise ignore it. THIS IS STILL NOT A FULL FIX FENTON. YOU NEED TO FIX 
                     FMODES SO IT DOESN'T FUCK UP WITH DEGENERATE MANIFOLDS. THIS IS JUST A BETTER BANDAID
                     '''
-                    if abs(self.AtomHam()[i,i]-self.AtomHam()[j,j]) <= 1e-4 or 100*(abs(self.AtomHam()[i,i]-self.AtomHam()[j,j])/abs(self.AtomHam()[i,i])) <= 1 :
+                    if abs(self.QD.states[i]-self.QD.states[j]) <= 1e-6 or abs(self.QD.states[i]) != 0 and 100*(abs(self.QD.states[i]-self.QD.states[j])/abs(self.QD.states[i])) <= 1 :
                         self.ZHammy[i,i] = -1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
                         self.ZHammy[j,j] =  1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
                         self.ZHammy[i,j] = self.ZHammy[j,i] = (1/2)*self.Bfield.Bvec[0]*self.QD.gfactors[Count][0]
+                       
                         Count += 1
         return Qobj(np.round(self.ZHammy,10))
         
@@ -721,7 +779,7 @@ class QSys:
         TransHam = np.zeros((self.QD.Hdim,self.QD.Hdim),dtype='complex')
         N = len(self.QD.states)
         for n in range(N):
-            TransHam[n,n] = self.QD.states[n]*(2*np.pi)
+            TransHam[n,n] = self.QD.states[n]
         
         TransMat = self.v.dag()*(Qobj(TransHam)+self.ZHam())*self.v
         
