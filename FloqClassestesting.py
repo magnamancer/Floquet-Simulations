@@ -103,10 +103,6 @@ class QSys:
         self.v = Qobj(v)
         
      
-        # H = [self.v.dag()*(self.AtomHam()+self.ZHam())*self.v,                                                    \
-        #     [self.v.dag()*self.LasHam()[0]*self.v,'exp(1j * w * t )'],                    \
-        #     [self.v.dag()*self.LasHam()[1]*self.v, 'exp(-1j * w * t )']]                  #Full Hamiltonian in string format, a form acceptable to QuTiP
-       
         
       
         '''
@@ -332,46 +328,10 @@ class QSys:
             
             pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
             
-            
-            # print('finished operator state conversions') 
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
             
-            
-            steadystate_time = taulist[-1]+taulist[1]
-            rhoss_floquet = scp.integrate.solve_ivp(esm.rhodot                   ,
-                                                    t_span = (0,steadystate_time),
-                                                    y0=rho0_floquet              ,
-                                                    args=(Rdic,self.beat)        ,
-                                                    method='DOP853'              ,
-                                                    t_eval=np.append(taulist,steadystate_time) ,
-                                                    rtol=opts.rtol               ,
-                                                    atol=opts.atol).y[:,-1]                                                                 
-            # print('finished solving the IVP/time evolving rho0')
-            '''
-            Next step is to iterate this steady state rho_s forward in time by one period of the Hamiltonian for the purpose of time averaging the result. I'll choose the times
-            to be evenly spread out within T, the time scale of the Hamiltonian.
-            
-            In this step I also multiply in the population operator in the Floquet STATE basis at the correct time, to get the un-time-averaged excitation spectra. Then I average the result over
-            the time axis and take the trace to get the population value (I think?) in the steady state.
-            '''
-
-            excite_t = [ (pop_op[-Nt+i])                       \
-                          @ np.reshape(
-                                scp.integrate.solve_ivp(esm.rhodot                       ,
-                                                        t_span = (steadystate_time,steadystate_time+tlist[-1])   ,
-                                                        y0=rhoss_floquet                 ,
-                                                        args=(Rdic,self.beat)           ,
-                                                        method='DOP853'                  ,
-                                                        t_eval=(steadystate_time+tlist)            ,
-                                                        rtol=opts.rtol                   ,
-                                                        atol=opts.atol).y[:,i]           ,
-                                        (self.QD.Hdim,self.QD.Hdim),order='F')  
-                            for i in list(range(0,Nt))]
-                
-                
-            average_excite = np.average(excite_t,axis=0)
-            excitevals[detpols[Ldx]] = np.trace(average_excite,axis1=0,axis2=1)
+            excitevals[detpols[Ldx]] = esm.expect_1op_1t(pop_op,rho0_floquet,tlist,taulist,Rdic,self.beat/2,opts = opts)
             
             # print('Finished Detpol',detpols[Ldx])
         print('Finished excitation spectrum')  
@@ -456,88 +416,8 @@ class QSys:
             
             
             
-            steadystate_time = taulist[-1]+taulist[1]
-            rhoss_floquet = scp.integrate.solve_ivp(esm.rhodot                   ,
-                                                    t_span = (0,steadystate_time),
-                                                    y0=rho0_floquet              ,
-                                                    args=(Rdic,self.beat)        ,
-                                                    method='DOP853'              ,
-                                                    t_eval=np.append(taulist,steadystate_time) ,
-                                                    rtol=opts.rtol               ,
-                                                    atol=opts.atol).y[:,-1]                                                                 
-           
-     
-            
-           
-            
-           
-            '''
-            Next step is to iterate this steady state rho_s forward in time. I'll choose the times
-            to be evenly spread out within T, the time scale of the Hamiltonian
-            
-            In this step I also multiply in the lowering operator in the Floquet STATE basis at the correct time,
-            from (taulist[-1]+dt) to (taulist[-1]+dt+tlist[-1])
-            '''
-            
-        
-            Bstates = [ sys_f_low[len(taulist)+i]                       \
-                          @ np.reshape(
-                                scp.integrate.solve_ivp(esm.rhodot,
-                                                        t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
-                                                        y0=rhoss_floquet                ,
-                                                        args=(Rdic,self.beat)               ,
-                                                        method='DOP853'         ,
-                                                        t_eval=(steadystate_time+tlist)            ,
-                                                        rtol=opts.rtol              ,
-                                                        atol=opts.atol).y[:,i]       ,
-                                        (self.QD.Hdim,self.QD.Hdim),order='F')  
-                            for i in list(range(0,Nt))]
-                
 
-            
-            '''
-            Setting up a matrix to have rows equal to the number of tau values and columns equal to the number of t values
-            At the end I'll average over each row to get a vector where each entry is a tau value and an averaged t value
-            '''
-        
-            # print('Finished B-States')
-            
-            AstatesUnAv = np.zeros( (len(Bstates), len(taulist), self.QD.Hdim,self.QD.Hdim), dtype='complex_' ) 
-            # print('Starting A States')
-            for tdx, Bstate1 in enumerate(Bstates): #First for loop to find the tau outputs for each t value
-                #New "starting time"
-                initial_tau = steadystate_time+tlist[tdx]
-                
-                # print('Filling column',tdx+1,'of',len(Bstates))
-                TauBSEvol = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
-                                                    esm.rhodot,
-                                                    t_span = (initial_tau,initial_tau+taulist[-1]), 
-                                                    y0=np.reshape(Bstate1,(self.QD.Hdim**2,),order='F'),
-                                                    args=(Rdic,self.beat),
-                                                    method='DOP853',
-                                                    t_eval=(initial_tau+taulist),
-                                                    rtol=opts.rtol,
-                                                    atol=opts.atol).y,
-                                        self.QD.Hdim,axis=0)),(0,1,2),(1,0,2))
-                
-                '''
-                STOP CHANGING THE ORDER OF THE TRANSPOSE FENTON. IT ISN'T GOING TO FIX IT
-                TIMES I WAS WEAK: 14
-                '''
-                
-                AstatesUnAv[tdx,...] = sys_f_raise[(len(taulist)+tdx):(2*len(taulist)+tdx)]@ TauBSEvol
-            # print('found unaveraged A-States')   
-            '''
-            Okay so the output matrix from above is a bunch of 2x2 density matrices
-            where the value idx1 refers to the tau value and the value idx refers to the t value
-
-            Going forward I should now average over each "row" of t values, i.e. average over idx
-            '''
-            
-            AStatesAvg = np.mean(AstatesUnAv,axis=0)
-            
-            
-            g1 = np.trace(AStatesAvg,axis1=1,axis2=2)
+            g1 = esm.expect_2op_2t(sys_f_low, sys_f_raise, rho0_floquet, tlist, taulist, Rdic, self.beat/2)
             
             if retg1 == 'True':
                 g1dic[detpols[Ldx]] = g1
@@ -553,11 +433,10 @@ class QSys:
         elif retg1 == 'True':
             return Z,g1dic
         
-        
+            
     def g2_tau(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), opts = None):
         ############### Time evolving rho0 with solve_ivp#########################
         
-             
         
         
         
@@ -601,9 +480,6 @@ class QSys:
         Calling the raising and lowering operators for use below
         
         '''      
-        
-         
-
 
         lowop_floquet_fourier_amps_list = esm.floquet_fourier_amps(Nt,tlist,taulist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
 
@@ -616,11 +492,7 @@ class QSys:
         '''
         lowop_detection_polarization_modified_list =  esm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
            
-        
-  
-        
-        
-        print('set detection polarization')
+    
         g2func = {}
         for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
 
@@ -628,97 +500,11 @@ class QSys:
             sys_f_raise = np.transpose(sys_f_low,axes=(0,2,1)).conj()
             pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
 
-             
-            # print('finished operator state con versions') 
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
             
-            
-            steadystate_time = taulist[-1]+taulist[1]
-            rhoss_floquet = scp.integrate.solve_ivp(esm.rhodot                   ,
-                                                    t_span = (0,steadystate_time),
-                                                    y0=rho0_floquet              ,
-                                                    args=(Rdic,self.beat)        ,
-                                                    method='DOP853'              ,
-                                                    t_eval=np.append(taulist,steadystate_time) ,
-                                                    rtol=opts.rtol               ,
-                                                    atol=opts.atol).y[:,-1]                                                                 
-           
-     
-            
-           
-            
-           
-            '''
-            Evolving one more period forward for averaging purposes
-
-            '''
-            rhoss_floquet_t = [ 
-                        np.reshape(
-                            scp.integrate.solve_ivp(esm.rhodot,
-                                                    t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
-                                                    y0=rhoss_floquet                ,
-                                                    args=(Rdic,self.beat)               ,
-                                                    method='DOP853'         ,
-                                                    t_eval=(steadystate_time+tlist)            ,
-                                                    rtol=opts.rtol              ,
-                                                    atol=opts.atol).y[:,i]       ,
-                                    (self.QD.Hdim,self.QD.Hdim),order='F')   
-                        for i in range(Nt)]
-            
-            '''
-            Forming the innermost t (as opposed to t+tau) portion of the g2 numerator
-            '''
-            D_rho_A = [sys_f_low[len(taulist)+idx] @ rhoss_floquet_t[idx] @ sys_f_raise[len(taulist)+idx] for idx in range(Nt)]
-            
-            
-        
-            g2_numerator_unavg   = np.zeros( (len( D_rho_A)         , len(taulist), self.QD.Hdim,self.QD.Hdim), dtype='complex_' ) 
-            g2_denominator_unavg = np.zeros( (len(  rhoss_floquet_t), len(taulist), self.QD.Hdim,self.QD.Hdim), dtype='complex_' ) 
-            # print('Starting A States')
-            for tdx in range(Nt): #First for loop to find the tau outputs for each t value
-                #New "starting time"
-                initial_tau = steadystate_time+tlist[tdx]
-                
-                
-                
-                numer_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
-                                                    esm.rhodot,
-                                                    t_span = (initial_tau,initial_tau+taulist[-1]), 
-                                                    y0=np.reshape(D_rho_A[tdx],(self.QD.Hdim**2,),order='F'),
-                                                    args=(Rdic,self.beat),
-                                                    method='DOP853',
-                                                    t_eval=(initial_tau+taulist),
-                                                    rtol=opts.rtol,
-                                                    atol=opts.atol).y,
-                                        self.QD.Hdim,axis=0)),(0,1,2),(1,0,2))
-                
-                
-                
-                denom_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
-                                                    esm.rhodot,
-                                                    t_span = (initial_tau,initial_tau+taulist[-1]), 
-                                                    y0=np.reshape(rhoss_floquet_t[tdx],(self.QD.Hdim**2,),order='F'),
-                                                    args=(Rdic,self.beat),
-                                                    method='DOP853',
-                                                    t_eval=(initial_tau+taulist),
-                                                    rtol=opts.rtol,
-                                                    atol=opts.atol).y,
-                                        self.QD.Hdim,axis=0)),(0,1,2),(1,0,2))
-                
-                
-                
-                
-                g2_numerator_unavg[tdx,...]   = pop_op[(len(taulist)+tdx):(2*len(taulist)+tdx)] @ numer_tau_evolution
-                g2_denominator_unavg[tdx,...] = pop_op[(len(taulist)+tdx):(2*len(taulist)+tdx)] @ denom_tau_evolution
-               
-            
-            g2_numerator_avg   = np.mean(g2_numerator_unavg,axis=0)
-            g2_denominator_avg = np.mean(g2_denominator_unavg,axis=0)
-            
-            g2_numer_expect = np.trace(g2_numerator_avg  , axis1=1, axis2=2)
-            g2_denom_expect = np.trace(g2_denominator_avg, axis1=1, axis2=2)
-            
+            g2_denom_expect = esm.expect_1op_manyt(pop_op, rho0_floquet, tlist, taulist, Rdic, self.beat/2)
+            g2_numer_expect = esm.expect_4op_2t(sys_f_raise, sys_f_raise, sys_f_low, sys_f_low, rho0_floquet, tlist, taulist, Rdic, self.beat/2)
                 
             '''
             Taking t = 0 as "statistically stationary" or w/e it's called means 
@@ -727,10 +513,7 @@ class QSys:
             ''' 
             g2func[detpols[Ldx]] = np.array([g2_numer_expect[taudx]/(g2_denom_expect[0] * g2_denom_expect[taudx]) for taudx in range(len(taulist))])
             print('finished',detpols[Ldx])
-        return g2func, taulist
-            
-            
-            
+        return g2func, taulist      
             
             
     def loFFTplot(self,low_op,Nt):  

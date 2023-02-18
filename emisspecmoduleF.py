@@ -417,6 +417,427 @@ def rhodot(t,p,Rdic,beatfreq,):
 
 
 
+def expect_1op_1t(oper,rho0,tlist,taulist,Rdic,omega,opts = None):
+    '''
+    for finding <op1(t)>
+
+    Parameters
+    ----------
+    op1 : Square matrix operator
+        the operator, to be evaluated at t, in the expectation value
+    rho0 : vector density supermatrix
+       initial state in the FLOQUET basis
+    tlist : linspace
+        time list over one period of the Hamiltonian, with evenly distributed t-points
+    taulist : linspace
+        times tau over which to evaluate the two-time expectation value.
+    Rdic : Dic
+        Hdim**2 by Hdim**2 matrix values, with variable number of keys depending on selected time-dependance.
+        Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
+    omega : float??
+        time period of the Hamiltonian
+    opts : TYPE, optional
+        optional arguments for solve_ivp solvers. The default is None.
+
+    Returns
+    -------
+    one_op_one_time_expect : list of values
+       calculated 1 operator 1 time expectation value.
+
+    
+    '''
+    
+    if opts == None:
+        opts = Options()                                  #Setting up the options used in the mode and state solvers
+        opts.atol = 1e-6                                  #Absolute tolerance
+        opts.rtol = 1e-8                                  #Relative tolerance
+        opts.nsteps= 10e+6                                #Maximum number of Steps                              #Maximum number of Steps
+    
+        
+    
+    op_dims = np.shape(oper)[-1] #operator is square so taking the last dimension should be fine.
+    
+    steadystate_time = taulist[-1]+taulist[1]
+    rho_steadystate= scp.integrate.solve_ivp(rhodot                   ,
+                                            t_span = (0,steadystate_time),
+                                            y0=rho0              ,
+                                            args=(Rdic,omega)        ,
+                                            method='DOP853'              ,
+                                            t_eval=np.append(taulist,steadystate_time) ,
+                                            rtol=opts.rtol               ,
+                                            atol=opts.atol).y[:,-1]                                                                 
+    # print('finished solving the IVP/time evolving rho0')
+    '''
+    Next step is to iterate this steady state rho_s forward in time by one period of the Hamiltonian for the purpose of time averaging the result. I'll choose the times
+    to be evenly spread out within T, the time scale of the Hamiltonian.
+    
+    In this step I also multiply in the population operator in the Floquet STATE basis at the correct time, to get the un-time-averaged excitation spectra. Then I average the result over
+    the time axis and take the trace to get the population value (I think?) in the steady state.
+    '''
+
+    op_rho_ss_unavg = [ (oper[-len(tlist)+i])                       \
+                  @ np.reshape(
+                        scp.integrate.solve_ivp(rhodot                       ,
+                                                t_span = (steadystate_time,steadystate_time+tlist[-1])   ,
+                                                y0=rho_steadystate                 ,
+                                                args=(Rdic,omega)           ,
+                                                method='DOP853'                  ,
+                                                t_eval=(steadystate_time+tlist)            ,
+                                                rtol=opts.rtol                   ,
+                                                atol=opts.atol).y[:,i]           ,
+                                (op_dims,op_dims),order='F')  
+                    for i in list(range(0,len(tlist)))]
+        
+        
+    op_rho_ss_avg = np.average(op_rho_ss_unavg,axis=0)
+    one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=0,axis2=1)
+    
+    return one_op_one_time_expect
+
+def expect_1op_manyt(oper,rho0,tlist,taulist,Rdic,omega,opts = None):
+    '''
+    I WANT TO MERGE THIS AND EXPECT_1OP_1T LATER, BUT I NEED TO GET THE STEADYSTATE SOLVER UP BEFORE I GO
+        MESSING WITH TAULIST DEFINITIONS. THIS WILL NEED TO STAY FOR NOW
+    
+    
+    
+    for finding <op1(t)>
+
+    Parameters
+    ----------
+    op1 : Square matrix operator
+        the operator, to be evaluated at t, in the expectation value
+    rho0 : vector density supermatrix
+       initial state in the FLOQUET basis
+    tlist : linspace
+        time list over one period of the Hamiltonian, with evenly distributed t-points
+    taulist : linspace
+        times tau over which to evaluate the two-time expectation value.
+    Rdic : Dic
+        Hdim**2 by Hdim**2 matrix values, with variable number of keys depending on selected time-dependance.
+        Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
+    omega : float??
+        time period of the Hamiltonian
+    opts : TYPE, optional
+        optional arguments for solve_ivp solvers. The default is None.
+
+    Returns
+    -------
+    one_op_one_time_expect : list of values
+       calculated 1 operator 1 time expectation value.
+
+    
+    '''
+    
+    if opts == None:
+        opts = Options()                                  #Setting up the options used in the mode and state solvers
+        opts.atol = 1e-6                                  #Absolute tolerance
+        opts.rtol = 1e-8                                  #Relative tolerance
+        opts.nsteps= 10e+6                                #Maximum number of Steps                              #Maximum number of Steps
+    
+        
+    
+    op_dims = np.shape(oper)[-1] #operator is square so taking the last dimension should be fine.
+    
+    steadystate_time = taulist[-1]+taulist[1]
+    rho_steadystate= scp.integrate.solve_ivp(rhodot                   ,
+                                            t_span = (0,steadystate_time),
+                                            y0=rho0              ,
+                                            args=(Rdic,omega)        ,
+                                            method='DOP853'              ,
+                                            t_eval=np.append(taulist,steadystate_time) ,
+                                            rtol=opts.rtol               ,
+                                            atol=opts.atol).y[:,-1]                                                                 
+    # print('finished solving the IVP/time evolving rho0')
+    '''
+    Next step is to iterate this steady state rho_s forward in time by one period of the Hamiltonian for the purpose of time averaging the result. I'll choose the times
+    to be evenly spread out within T, the time scale of the Hamiltonian.
+    
+    In this step I also multiply in the population operator in the Floquet STATE basis at the correct time, to get the un-time-averaged excitation spectra. Then I average the result over
+    the time axis and take the trace to get the population value (I think?) in the steady state.
+    '''
+    
+    rhoss_t = [ 
+                np.reshape(
+                    scp.integrate.solve_ivp(rhodot,
+                                            t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
+                                            y0= rho_steadystate                ,
+                                            args=(Rdic,omega)               ,
+                                            method='DOP853'         ,
+                                            t_eval=(steadystate_time+tlist)            ,
+                                            rtol=opts.rtol              ,
+                                            atol=opts.atol).y[:,i]       ,
+                            (op_dims,op_dims),order='F')   
+                for i in range(len(tlist))]
+    
+        
+    op_rho_ss_unavg_many_t  = np.zeros( (len( rhoss_t)         , len(taulist), op_dims,op_dims), dtype='complex_' ) 
+    # print('Starting A States')
+    for tdx in range(len(tlist)): #First for loop to find the tau outputs for each t value
+        #New "starting time"
+        initial_tau = steadystate_time+tlist[tdx]
+        
+        rho_ss_tau_evolve = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
+                                            rhodot,
+                                            t_span = (initial_tau,initial_tau+taulist[-1]), 
+                                            y0=np.reshape(rhoss_t[tdx],(op_dims**2,),order='F'),
+                                            args=(Rdic,omega),
+                                            method='DOP853',
+                                            t_eval=(initial_tau+taulist),
+                                            rtol=opts.rtol,
+                                            atol=opts.atol).y,
+                                op_dims,axis=0)),(0,1,2),(1,0,2))
+                
+        op_rho_ss_unavg_many_t[tdx,...] = oper[(len(taulist)+tdx):(2*len(taulist)+tdx)] @ rho_ss_tau_evolve    
+    
+    op_rho_ss_avg = np.mean(op_rho_ss_unavg_many_t,axis=0)
+    one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=1,axis2=2)
+
+    
+    return one_op_one_time_expect
+ 
+def expect_2op_2t(op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):  
+    '''
+    for finding <op1(t) op2(t+tau)>
+
+    Parameters
+    ----------
+    op1 : Square matrix operator
+        the first operator, to be evaluated at t, in the expectation value
+    op2 : Square matrix operator
+        the second operator, to be evaluated at t+tau, in the expectation value
+    rho0 : vector density supermatrix
+       initial state in the FLOQUET basis
+    tlist : linspace
+        time list over one period of the Hamiltonian, with evenly distributed t-points
+    taulist : linspace
+        times tau over which to evaluate the two-time expectation value.
+    Rdic : Dic
+        Hdim**2 by Hdim**2 matrix values, with variable number of keys depending on selected time-dependance.
+        Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
+    omega : float??
+        time period of the Hamiltonian
+    opts : TYPE, optional
+        optional arguments for solve_ivp solvers. The default is None.
+
+    Returns
+    -------
+    two_op_two_time_expect : list of values
+       calculated 2 operator 2 time expectation value.
+
+    '''
+    
+    
+    
+    if opts == None:
+        opts = Options()                                  #Setting up the options used in the mode and state solvers
+        opts.atol = 1e-6                                  #Absolute tolerance
+        opts.rtol = 1e-8                                  #Relative tolerance
+        opts.nsteps= 10e+6   
+  
+    
+  
+    op_dims = np.shape(op1)[-1]  
+  
+    
+  
+    steadystate_time = taulist[-1]+taulist[1]
+    rhoss_steadystate = scp.integrate.solve_ivp(rhodot                   ,
+                                            t_span = (0,steadystate_time),
+                                            y0=rho0              ,
+                                            args=(Rdic,omega)        ,
+                                            method='DOP853'              ,
+                                            t_eval=np.append(taulist,steadystate_time) ,
+                                            rtol=opts.rtol               ,
+                                            atol=opts.atol).y[:,-1]                                                                 
+   
+ 
+    
+   
+    
+   
+    '''
+    Next step is to iterate this steady state rho_s forward in time. I'll choose the times
+    to be evenly spread out within T, the time scale of the Hamiltonian
+    
+    In this step I also multiply in the lowering operator in the Floquet STATE basis at the correct time,
+    from (taulist[-1]+dt) to (taulist[-1]+dt+tlist[-1])
+    '''
+    
+
+    one_op_rhoss_prod = [ op1[len(taulist)+i]                       \
+                          @ np.reshape(
+                                scp.integrate.solve_ivp(rhodot,
+                                                        t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
+                                                        y0=rhoss_steadystate               ,
+                                                        args=(Rdic,omega)               ,
+                                                        method='DOP853'         ,
+                                                        t_eval=(steadystate_time+tlist)            ,
+                                                        rtol=opts.rtol              ,
+                                                        atol=opts.atol).y[:,i]       ,
+                                        (op_dims,op_dims),order='F')  
+                            for i in range(len(tlist))]
+        
+
+    
+    '''
+    Setting up a matrix to have rows equal to the number of tau values and columns equal to the number of t values
+    At the end I'll average over each row to get a vector where each entry is a tau value and an averaged t value
+    '''
+
+    # print('Finished B-States')
+    
+    two_op_rho_ss_unavg = np.zeros( (len(one_op_rhoss_prod), len(taulist), op_dims,op_dims), dtype='complex_' ) 
+    # print('Starting A States')
+    for tdx, one_op_rhoss_single_t in enumerate(one_op_rhoss_prod): #First for loop to find the tau outputs for each t value
+        #New "starting time"
+        initial_tau = steadystate_time+tlist[tdx]
+        
+        # print('Filling column',tdx+1,'of',len(Bstates))
+        one_op_rho_ss_unavg_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
+                                            rhodot,
+                                            t_span = (initial_tau,initial_tau+taulist[-1]), 
+                                            y0=np.reshape(one_op_rhoss_single_t,(op_dims**2,),order='F'),
+                                            args=(Rdic,omega),
+                                            method='DOP853',
+                                            t_eval=(initial_tau+taulist),
+                                            rtol=opts.rtol,
+                                            atol=opts.atol).y,
+                               op_dims,axis=0)),(0,1,2),(1,0,2))
+        
+        '''
+        STOP CHANGING THE ORDER OF THE TRANSPOSE FENTON. IT ISN'T GOING TO FIX IT
+        TIMES I WAS WEAK: 14
+        '''
+        
+        two_op_rho_ss_unavg[tdx,...] = op2[(len(taulist)+tdx):(2*len(taulist)+tdx)]@ one_op_rho_ss_unavg_tau_evolution
+    # print('found unaveraged A-States')   
+    '''
+    Okay so the output matrix from above is a bunch of 2x2 density matrices
+    where the value idx1 refers to the tau value and the value idx refers to the t value
+
+    Going forward I should now average over each "row" of t values, i.e. average over idx
+    '''
+    
+    two_op_rho_ss_avg = np.mean( two_op_rho_ss_unavg,axis=0)
+    
+    
+    two_op_two_time_expect = np.trace(two_op_rho_ss_avg,axis1=1,axis2=2)
+    
+    return two_op_two_time_expect
+
+def expect_4op_2t(op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):  
+    '''
+    for finding <A(t0)*B(t1)*C(t1)*D(t0)>
+
+    Parameters
+    ----------
+    op1 : Square matrix operator
+        the first operator, to be evaluated at t, in the expectation value
+    op2 : Square matrix operator
+        the second operator, to be evaluated at t+tau, in the expectation value
+    op3 : Square matrix operator
+        the third operator, to be evaluated at t+tau, in the expectation value
+    op4 : Square matrix operator
+        the fourth operator, to be evaluated at t+tau, in the expectation value
+    rho0 : vector density supermatrix
+       initial state in the FLOQUET basis
+    tlist : linspace
+        time list over one period of the Hamiltonian, with evenly distributed t-points
+    taulist : linspace
+        times tau over which to evaluate the two-time expectation value.
+    Rdic : Dic
+        Hdim**2 by Hdim**2 matrix values, with variable number of keys depending on selected time-dependance.
+        Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
+    omega : float??
+        time period of the Hamiltonian
+    opts : TYPE, optional
+        optional arguments for solve_ivp solvers. The default is None.
+
+    Returns
+    -------
+    two_op_two_time_expect : list of values
+       calculated 2 operator 2 time expectation value.
+
+    '''
+    
+    if opts == None:
+        opts = Options()                                  #Setting up the options used in the mode and state solvers
+        opts.atol = 1e-6                                  #Absolute tolerance
+        opts.rtol = 1e-8                                  #Relative tolerance
+        opts.nsteps= 10e+6   
+  
+    op_dims = np.shape(op1)[-1]  
+    
+    steadystate_time = taulist[-1]+taulist[1]
+    rhoss = scp.integrate.solve_ivp(rhodot                   ,
+                                            t_span = (0,steadystate_time),
+                                            y0=rho0              ,
+                                            args=(Rdic,omega)        ,
+                                            method='DOP853'              ,
+                                            t_eval=np.append(taulist,steadystate_time) ,
+                                            rtol=opts.rtol               ,
+                                            atol=opts.atol).y[:,-1]                                                                 
+   
+
+    
+   
+    
+   
+    '''
+    Evolving one more period forward for averaging purposes
+
+    '''
+    D_rhoss_A = [ op4[len(taulist)+i] @
+                np.reshape(
+                    scp.integrate.solve_ivp(rhodot,
+                                            t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
+                                            y0=rhoss                ,
+                                            args=(Rdic,omega)               ,
+                                            method='DOP853'         ,
+                                            t_eval=(steadystate_time+tlist)            ,
+                                            rtol=opts.rtol              ,
+                                            atol=opts.atol).y[:,i]       ,
+                            (op_dims,op_dims),order='F')   
+                @ op1[len(taulist)+i]
+                for i in range(len(tlist))]
+    
+    '''
+    Forming the innermost t (as opposed to t+tau) portion of the g2 numerator
+    '''
+    # D_rhoss_A = [sys_f_low[len(taulist)+idx] @ rhoss_floquet_t[idx] @ sys_f_raise[len(taulist)+idx] for idx in range(Nt)]
+    
+    
+
+    unavgd_4op_rhoss   = np.zeros( (len( D_rhoss_A)         , len(taulist), op_dims,op_dims), dtype='complex_' ) 
+    for tdx in range(len(tlist)): #First for loop to find the tau outputs for each t value
+        #New "starting time"
+        initial_tau = steadystate_time+tlist[tdx]
+        
+        
+        
+        oper_state_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
+                                            rhodot,
+                                            t_span = (initial_tau,initial_tau+taulist[-1]), 
+                                            y0=np.reshape(D_rhoss_A[tdx],(op_dims**2,),order='F'),
+                                            args=(Rdic,omega),
+                                            method='DOP853',
+                                            t_eval=(initial_tau+taulist),
+                                            rtol=opts.rtol,
+                                            atol=opts.atol).y,
+                                op_dims,axis=0)),(0,1,2),(1,0,2))
+        
+        
+        
+        
+        unavgd_4op_rhoss[tdx,...]   = (op2 @ op3)[(len(taulist)+tdx):(2*len(taulist)+tdx)] @ oper_state_tau_evolution
+       
+    
+    avgd_4op_rhoss   = np.mean(unavgd_4op_rhoss,axis=0)
+    
+    expect4op2t = np.trace( avgd_4op_rhoss  , axis1=1, axis2=2)
+   
+    return expect4op2t
 
 
 
