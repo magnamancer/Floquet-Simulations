@@ -299,8 +299,8 @@ class QSys:
         dtau = dt                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
-        
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist, opts = opts) 
+        ss_time = esm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         # print('found f0, qe, f_states_all_periods')
         
         
@@ -330,8 +330,8 @@ class QSys:
             
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
-            
-            excitevals[detpols[Ldx]] = esm.expect_1op_1t(pop_op,rho0_floquet,tlist,taulist,Rdic,self.beat/2,opts = opts)
+            rho_steadystate = esm.steadystate_rho(rho0_floquet,ss_time,Nt,Rdic,self.beat/2,self.T)
+            excitevals[detpols[Ldx]] = esm.expect_1op_1t(pop_op,rho_steadystate,tlist,Rdic,self.beat/2,opts = opts)
             
             # print('Finished Detpol',detpols[Ldx])
         print('Finished excitation spectrum')  
@@ -373,25 +373,15 @@ class QSys:
         taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
 
         
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulistF, opts = opts)
+        ss_time = esm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         
-        print('found f0, qe, f_states_all_periods')
+
                
-        '''
-        Doing the raising and lowering operator transformations, to move them
-            into the Floquet basis for every t_inf+t
-
-        Calling the raising and lowering operators for use below
-        
-        '''      
-        
-         
-
-
         lowop_floquet_fourier_amps_list = esm.floquet_fourier_amps(Nt,tlist,taulist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
 
         Rdic = esm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
-        print('Built R(t)')
+
         
         
         '''
@@ -400,10 +390,8 @@ class QSys:
         lowop_detection_polarization_modified_list =  esm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
            
         
-  
         
         
-        print('set detection polarization')
         Z = {}
         g1dic = {}
         for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
@@ -411,13 +399,13 @@ class QSys:
             sys_f_low = f_states_all_periods_conjt @ (detpol_low_op).full() @ f_states_all_periods
             sys_f_raise = np.transpose(sys_f_low,axes=(0,2,1)).conj()
             
-            # print('finished operator state conversions') 
+            
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
             
             
-
-            g1 = esm.expect_2op_2t(sys_f_low, sys_f_raise, rho0_floquet, tlist, taulist, Rdic, self.beat/2)
+            rho_steadystate = esm.steadystate_rho(rho0_floquet,ss_time,Nt,Rdic,self.beat/2,self.T)
+            g1 = esm.expect_2op_2t(sys_f_low, sys_f_raise, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
             
             if retg1 == 'True':
                 g1dic[detpols[Ldx]] = g1
@@ -469,7 +457,8 @@ class QSys:
         taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
 
         
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulistF, opts = opts)
+        ss_time = esm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         
         print('found f0, qe, f_states_all_periods')
                
@@ -501,10 +490,11 @@ class QSys:
             pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
 
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
+            rho_steadystate = esm.steadystate_rho(rho0_floquet,ss_time,Nt,Rdic,self.beat/2,self.T)
             
-            
-            g2_denom_expect = esm.expect_1op_manyt(pop_op, rho0_floquet, tlist, taulist, Rdic, self.beat/2)
-            g2_numer_expect = esm.expect_4op_2t(sys_f_raise, sys_f_raise, sys_f_low, sys_f_low, rho0_floquet, tlist, taulist, Rdic, self.beat/2)
+
+            g2_denom_expect = esm.expect_1op_1t(pop_op, rho_steadystate, tlist,  Rdic, self.beat/2,taulist=taulist)
+            g2_numer_expect = esm.expect_4op_2t(sys_f_raise, sys_f_raise, sys_f_low, sys_f_low, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
                 
             '''
             Taking t = 0 as "statistically stationary" or w/e it's called means 

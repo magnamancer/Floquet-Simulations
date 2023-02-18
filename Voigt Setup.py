@@ -117,17 +117,17 @@ LP = {
 
 
 
-tau = 100 #Length of time to go forward, in units of T, the system Frequency
-Nt = 2**2 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
+tau = 50 #Length of time to go forward, in units of T, the system Frequency
+Nt = 2**3 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
 
 point_spacing = 0.0001
-detuning0 = -.001
+detuning0 = -.005
 
 
-power_range = 101
+power_range = 51
 P_array = np.zeros(power_range)
 for i in range(power_range):
     P_array[i]=(((i*1)))
@@ -188,45 +188,45 @@ for idz, val in enumerate(P_array):
         transY2=(abs(Transitions[3]-Transitions[0]))
     
 
-    spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'],retg1='True')
+    # spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'],retg1='True')
 
-    # spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
+    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
     
     
 
 
-    # # #For ExciteSpec
-    # Z0Lavg.append(spec1['X']+spec1['Y'])
-    # Z0Cavg.append(spec1['SP']+spec1['SM'])
-    # ZXavg.append(spec1['X'])
-    # ZYavg.append(spec1['Y'])
-    # ZPavg.append(spec1['SP'])
-    # ZMavg.append(spec1['SM'])
+    # #For ExciteSpec
+    Z0Lavg.append(spec1['X']+spec1['Y'])
+    Z0Cavg.append(spec1['SP']+spec1['SM'])
+    ZXavg.append(spec1['X'])
+    ZYavg.append(spec1['Y'])
+    ZPavg.append(spec1['SP'])
+    ZMavg.append(spec1['SM'])
 
     
 
 
 
 
-    Z0L.append(spec1['X']+spec1['Y'])
-    Z0C.append(spec1['SP']+spec1['SM'])
-    ZX.append(spec1['X'])
-    ZY.append(spec1['Y'])
-    ZP.append(spec1['SP'])
-    ZM.append(spec1['SM'])
+    # Z0L.append(spec1['X']+spec1['Y'])
+    # Z0C.append(spec1['SP']+spec1['SM'])
+    # ZX.append(spec1['X'])
+    # ZY.append(spec1['Y'])
+    # ZP.append(spec1['SP'])
+    # ZM.append(spec1['SM'])
 
-    Z0g1.append(g1dic['X']+g1dic['Y'])
-    ZXg1.append(g1dic['X'])
-    ZYg1.append(g1dic['Y'])
-    ZPg1.append(g1dic['SP'])
-    ZMg1.append(g1dic['SM'])
+    # Z0g1.append(g1dic['X']+g1dic['Y'])
+    # ZXg1.append(g1dic['X'])
+    # ZYg1.append(g1dic['Y'])
+    # ZPg1.append(g1dic['SP'])
+    # ZMg1.append(g1dic['SM'])
     
-    Z0Lavg.append(np.average(Z0L[-1]))
-    Z0Cavg.append(np.average(Z0C[-1]))
-    ZXavg.append(np.average(ZX[-1]))
-    ZYavg.append(np.average(ZY[-1]))
-    ZPavg.append(np.average(ZP[-1]))
-    ZMavg.append(np.average(ZM[-1]))
+    # Z0Lavg.append(np.average(Z0L[-1]))
+    # Z0Cavg.append(np.average(Z0C[-1]))
+    # ZXavg.append(np.average(ZX[-1]))
+    # ZYavg.append(np.average(ZY[-1]))
+    # ZPavg.append(np.average(ZP[-1]))
+    # ZMavg.append(np.average(ZM[-1]))
     
 
 
@@ -279,73 +279,73 @@ total_time = time.time()-start_time
 # fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
 
 
-freqlims = [omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]#[-0.05,0.05]
+# freqlims = [omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]#[-0.05,0.05]
 
 
-frequency_range = (omega_array-(Exp.beat/(4*np.pi)))
-idx0 = np.where(abs(frequency_range-freqlims[0]) == np.amin(abs((frequency_range-freqlims[0] ))))[0][0]
-idxf = np.where(abs(frequency_range-freqlims[1]) == np.amin(abs((frequency_range-freqlims[1] ))))[0][0]
+# frequency_range = (omega_array-(Exp.beat/(4*np.pi)))
+# idx0 = np.where(abs(frequency_range-freqlims[0]) == np.amin(abs((frequency_range-freqlims[0] ))))[0][0]
+# idxf = np.where(abs(frequency_range-freqlims[1]) == np.amin(abs((frequency_range-freqlims[1] ))))[0][0]
 
-plot_freq_range = frequency_range[idx0:idxf]
-Z0L_truncated = np.stack([Z0Li[idx0:idxf] for Z0Li in Z0L])
-ZX_truncated = np.stack([ZXi[idx0:idxf] for ZXi in ZX])
-ZY_truncated = np.stack([ZYi[idx0:idxf] for ZYi in ZY])
-ZP_truncated = np.stack([ZPi[idx0:idxf] for ZPi in ZP])
-ZM_truncated = np.stack([ZMi[idx0:idxf] for ZMi in ZM])
-
-
+# plot_freq_range = frequency_range[idx0:idxf]
+# Z0L_truncated = np.stack([Z0Li[idx0:idxf] for Z0Li in Z0L])
+# ZX_truncated = np.stack([ZXi[idx0:idxf] for ZXi in ZX])
+# ZY_truncated = np.stack([ZYi[idx0:idxf] for ZYi in ZY])
+# ZP_truncated = np.stack([ZPi[idx0:idxf] for ZPi in ZP])
+# ZM_truncated = np.stack([ZMi[idx0:idxf] for ZMi in ZM])
 
 
-clims = [1e-6,1e-1]
 
-# Plot on a colorplot
-fig, ax = plt.subplots(2,2)
-limits = [plot_freq_range[0],\
-          plot_freq_range[-1],\
-          detuning0+P_array[0]*point_spacing,\
-          detuning0+P_array[-1]*point_spacing]
+
+# clims = [1e-6,1e-1]
+
+# # Plot on a colorplot
+# fig, ax = plt.subplots(2,2)
+# limits = [plot_freq_range[0],\
+#           plot_freq_range[-1],\
+#           detuning0+P_array[0]*point_spacing,\
+#           detuning0+P_array[-1]*point_spacing]
     
-pos = ax[0,0].imshow(ZX_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
-            extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
-ax[0,0].set_ylabel('$\Delta_1$ [THz]') 
-ax[0,0].set_title(F'detpol = X' )
+# pos = ax[0,0].imshow(ZX_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+#             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
+# ax[0,0].set_ylabel('$\Delta_1$ [THz]') 
+# ax[0,0].set_title(F'detpol = X' )
 
-pos = ax[0,1].imshow(ZY_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
-            extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
-ax[0,1].set_title(F'detpol = Y' )
+# pos = ax[0,1].imshow(ZY_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+#             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
+# ax[0,1].set_title(F'detpol = Y' )
 
-pos = ax[1,0].imshow(ZP_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
-            extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
-ax[1,0].set_xlabel('$\omega$ (THz)')
-ax[1,0].set_ylabel('$\Delta_1$ [THz]') 
-ax[1,0].set_title(F'detpol = SP' )
+# pos = ax[1,0].imshow(ZP_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+#             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
+# ax[1,0].set_xlabel('$\omega$ (THz)')
+# ax[1,0].set_ylabel('$\Delta_1$ [THz]') 
+# ax[1,0].set_title(F'detpol = SP' )
 
-pos = ax[1,1].imshow(ZM_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
-            extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
-ax[1,1].set_xlabel('$\omega$ (THz)')
+# pos = ax[1,1].imshow(ZM_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+#             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims)
+# ax[1,1].set_xlabel('$\omega$ (THz)')
 
-ax[1,1].set_title( 'detpol = SM' )
+# ax[1,1].set_title( 'detpol = SM' )
 
-fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {L2pol}, B = {Bpower}" )
-fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
+# fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {L2pol}, B = {Bpower}" )
+# fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
 
 
 
-# Plot on a colorplot
-fig, ax = plt.subplots(1,1)
-limits = [plot_freq_range[0],\
-          plot_freq_range[-1],\
-          detuning0+P_array[0]*point_spacing,\
-          detuning0+P_array[-1]*point_spacing]
-pos = ax.imshow(Z0L_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
-            extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims) 
-# ax.axvline(x=(0*Om1/(2*np.pi)), color='y', linestyle = 'solid',linewidth =3)
-# ax.axvline(x=(1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
-# ax.axvline(x=(-1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
-ax.set_xlabel('$\omega$ (THz)')
-ax.set_ylabel('$\Delta_1$ [THz]') 
-ax.set_title(F'Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {L2pol}, detpol = None, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}' )
-fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
+# # Plot on a colorplot
+# fig, ax = plt.subplots(1,1)
+# limits = [plot_freq_range[0],\
+#           plot_freq_range[-1],\
+#           detuning0+P_array[0]*point_spacing,\
+#           detuning0+P_array[-1]*point_spacing]
+# pos = ax.imshow(Z0L_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
+#             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims) 
+# # ax.axvline(x=(0*Om1/(2*np.pi)), color='y', linestyle = 'solid',linewidth =3)
+# # ax.axvline(x=(1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
+# # ax.axvline(x=(-1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
+# ax.set_xlabel('$\omega$ (THz)')
+# ax.set_ylabel('$\Delta_1$ [THz]') 
+# ax.set_title(F'Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {L2pol}, detpol = None, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}' )
+# fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
 
 
 
