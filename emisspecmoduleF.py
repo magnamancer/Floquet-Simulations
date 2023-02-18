@@ -165,7 +165,7 @@ Below are some meatier functions used for time evolution purposes,
 primarily
 
 '''
-def prepWork(H,T,args,tlist,taulist=None, opts = None):
+def prepWork(H,T,args,tlist,taulist=None, ss_time = None, opts = None):
     """
     Internal Function for use in calculating time evolution with FLoquet Theory
 
@@ -198,10 +198,15 @@ def prepWork(H,T,args,tlist,taulist=None, opts = None):
     Hdim = np.shape(H[0])[0]
     
     
+    if ss_time != None:
+        start_time = ss_time
+    else:
+        start_time = 0
+    
     # Setting useful constants to be used in a few lines
-    steadystate_time = taulist[-1]+taulist[1]  #The length of time Tau forward for which the system is being evolved
-    tau = int(np.ceil((steadystate_time)/T))
-    time_evolution_t_points = np.concatenate((taulist, steadystate_time+tlist)) #The times over which I'll need to solve the lowering and raising operators. Runs from Tau to 2*Tau+T = 2*(N*T)+T=T(2N+1)
+    end_time = start_time+taulist[-1]+taulist[1]  #The length of time Tau forward for which the system is being evolved
+    num_periods = int(np.ceil((end_time)/T))
+    time_evolution_t_points = np.concatenate((start_time+taulist, end_time+tlist)) #The times over which I'll need to solve the lowering and raising operators. Runs from Tau to 2*Tau+T = 2*(N*T)+T=T(2N+1)
     
     
     # print('starting f0')
@@ -233,7 +238,7 @@ def prepWork(H,T,args,tlist,taulist=None, opts = None):
     f_modes_list_one_period = np.stack([np.hstack([i.full() for i in modest]) for modest in f_modes_table_t])
 
     #Full time evaluation is tau number of periods +1 period for time averaging, so I need that many periods of modes
-    f_modes_list_full_time = np.tile(f_modes_list_one_period, (tau+1,1,1)) 
+    f_modes_list_full_time = np.tile(f_modes_list_one_period, (num_periods+1,1,1)) 
     
     f_modes_transpose = np.transpose(f_modes_list_full_time,(0,2,1))
     
@@ -417,7 +422,7 @@ def rhodot(t,p,Rdic,beatfreq,):
 
 
 
-def expect_1op_1t(oper,rho0,tlist,taulist,Rdic,omega,opts = None):
+def expect_1op_1t(oper,rho0,tlist,Rdic,omega, taulist = None, opts = None):
     '''
     for finding <op1(t)>
 
@@ -456,16 +461,7 @@ def expect_1op_1t(oper,rho0,tlist,taulist,Rdic,omega,opts = None):
         
     
     op_dims = np.shape(oper)[-1] #operator is square so taking the last dimension should be fine.
-    
-    steadystate_time = taulist[-1]+taulist[1]
-    rho_steadystate= scp.integrate.solve_ivp(rhodot                   ,
-                                            t_span = (0,steadystate_time),
-                                            y0=rho0              ,
-                                            args=(Rdic,omega)        ,
-                                            method='DOP853'              ,
-                                            t_eval=np.append(taulist,steadystate_time) ,
-                                            rtol=opts.rtol               ,
-                                            atol=opts.atol).y[:,-1]                                                                 
+                                                                 
     # print('finished solving the IVP/time evolving rho0')
     '''
     Next step is to iterate this steady state rho_s forward in time by one period of the Hamiltonian for the purpose of time averaging the result. I'll choose the times
@@ -474,127 +470,57 @@ def expect_1op_1t(oper,rho0,tlist,taulist,Rdic,omega,opts = None):
     In this step I also multiply in the population operator in the Floquet STATE basis at the correct time, to get the un-time-averaged excitation spectra. Then I average the result over
     the time axis and take the trace to get the population value (I think?) in the steady state.
     '''
-
-    op_rho_ss_unavg = [ (oper[-len(tlist)+i])                       \
+    
+    op_rho_ss_unavg = [ (oper[i])                       \
                   @ np.reshape(
                         scp.integrate.solve_ivp(rhodot                       ,
-                                                t_span = (steadystate_time,steadystate_time+tlist[-1])   ,
-                                                y0=rho_steadystate                 ,
+                                                t_span = (0,tlist[-1])   ,
+                                                y0=rho0                 ,
                                                 args=(Rdic,omega)           ,
                                                 method='DOP853'                  ,
-                                                t_eval=(steadystate_time+tlist)            ,
+                                                t_eval=(tlist)            ,
                                                 rtol=opts.rtol                   ,
                                                 atol=opts.atol).y[:,i]           ,
                                 (op_dims,op_dims),order='F')  
                     for i in list(range(0,len(tlist)))]
+    
+    if taulist is not None:
+        op_rho_ss_unavg_many_t  = np.zeros( (len( op_rho_ss_unavg)         , len(taulist), op_dims,op_dims), dtype='complex_' ) 
+        for tdx in range(len(tlist)): #First for loop to find the tau outputs for each t value
+            #New "starting time"
+            initial_tau = tlist[tdx]
+            
+           
+           
+            rho_ss_tau_evolve = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
+                                                rhodot,
+                                                t_span = (initial_tau,initial_tau+taulist[-1]), 
+                                                y0=np.reshape(op_rho_ss_unavg[tdx],(op_dims**2,),order='F'),
+                                                args=(Rdic,omega),
+                                                method='DOP853',
+                                                t_eval=(initial_tau+taulist),
+                                                rtol=opts.rtol,
+                                                atol=opts.atol).y,
+                                    op_dims,axis=0)),(0,1,2),(1,0,2))
+                    
+            op_rho_ss_unavg_many_t[tdx,...] = rho_ss_tau_evolve    
         
+            op_rho_ss_avg = np.mean(op_rho_ss_unavg_many_t,axis=0)
+        one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=1,axis2=2)
+    
         
-    op_rho_ss_avg = np.average(op_rho_ss_unavg,axis=0)
-    one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=0,axis2=1)
+    
+    
+    
+    else:
+        op_rho_ss_avg = np.average(op_rho_ss_unavg,axis=0)
+        one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=0,axis2=1)
+    
+    
+    
     
     return one_op_one_time_expect
 
-def expect_1op_manyt(oper,rho0,tlist,taulist,Rdic,omega,opts = None):
-    '''
-    I WANT TO MERGE THIS AND EXPECT_1OP_1T LATER, BUT I NEED TO GET THE STEADYSTATE SOLVER UP BEFORE I GO
-        MESSING WITH TAULIST DEFINITIONS. THIS WILL NEED TO STAY FOR NOW
-    
-    
-    
-    for finding <op1(t)>
-
-    Parameters
-    ----------
-    op1 : Square matrix operator
-        the operator, to be evaluated at t, in the expectation value
-    rho0 : vector density supermatrix
-       initial state in the FLOQUET basis
-    tlist : linspace
-        time list over one period of the Hamiltonian, with evenly distributed t-points
-    taulist : linspace
-        times tau over which to evaluate the two-time expectation value.
-    Rdic : Dic
-        Hdim**2 by Hdim**2 matrix values, with variable number of keys depending on selected time-dependance.
-        Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
-    omega : float??
-        time period of the Hamiltonian
-    opts : TYPE, optional
-        optional arguments for solve_ivp solvers. The default is None.
-
-    Returns
-    -------
-    one_op_one_time_expect : list of values
-       calculated 1 operator 1 time expectation value.
-
-    
-    '''
-    
-    if opts == None:
-        opts = Options()                                  #Setting up the options used in the mode and state solvers
-        opts.atol = 1e-6                                  #Absolute tolerance
-        opts.rtol = 1e-8                                  #Relative tolerance
-        opts.nsteps= 10e+6                                #Maximum number of Steps                              #Maximum number of Steps
-    
-        
-    
-    op_dims = np.shape(oper)[-1] #operator is square so taking the last dimension should be fine.
-    
-    steadystate_time = taulist[-1]+taulist[1]
-    rho_steadystate= scp.integrate.solve_ivp(rhodot                   ,
-                                            t_span = (0,steadystate_time),
-                                            y0=rho0              ,
-                                            args=(Rdic,omega)        ,
-                                            method='DOP853'              ,
-                                            t_eval=np.append(taulist,steadystate_time) ,
-                                            rtol=opts.rtol               ,
-                                            atol=opts.atol).y[:,-1]                                                                 
-    # print('finished solving the IVP/time evolving rho0')
-    '''
-    Next step is to iterate this steady state rho_s forward in time by one period of the Hamiltonian for the purpose of time averaging the result. I'll choose the times
-    to be evenly spread out within T, the time scale of the Hamiltonian.
-    
-    In this step I also multiply in the population operator in the Floquet STATE basis at the correct time, to get the un-time-averaged excitation spectra. Then I average the result over
-    the time axis and take the trace to get the population value (I think?) in the steady state.
-    '''
-    
-    rhoss_t = [ 
-                np.reshape(
-                    scp.integrate.solve_ivp(rhodot,
-                                            t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
-                                            y0= rho_steadystate                ,
-                                            args=(Rdic,omega)               ,
-                                            method='DOP853'         ,
-                                            t_eval=(steadystate_time+tlist)            ,
-                                            rtol=opts.rtol              ,
-                                            atol=opts.atol).y[:,i]       ,
-                            (op_dims,op_dims),order='F')   
-                for i in range(len(tlist))]
-    
-        
-    op_rho_ss_unavg_many_t  = np.zeros( (len( rhoss_t)         , len(taulist), op_dims,op_dims), dtype='complex_' ) 
-    # print('Starting A States')
-    for tdx in range(len(tlist)): #First for loop to find the tau outputs for each t value
-        #New "starting time"
-        initial_tau = steadystate_time+tlist[tdx]
-        
-        rho_ss_tau_evolve = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
-                                            rhodot,
-                                            t_span = (initial_tau,initial_tau+taulist[-1]), 
-                                            y0=np.reshape(rhoss_t[tdx],(op_dims**2,),order='F'),
-                                            args=(Rdic,omega),
-                                            method='DOP853',
-                                            t_eval=(initial_tau+taulist),
-                                            rtol=opts.rtol,
-                                            atol=opts.atol).y,
-                                op_dims,axis=0)),(0,1,2),(1,0,2))
-                
-        op_rho_ss_unavg_many_t[tdx,...] = oper[(len(taulist)+tdx):(2*len(taulist)+tdx)] @ rho_ss_tau_evolve    
-    
-    op_rho_ss_avg = np.mean(op_rho_ss_unavg_many_t,axis=0)
-    one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=1,axis2=2)
-
-    
-    return one_op_one_time_expect
  
 def expect_2op_2t(op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):  
     '''
@@ -641,15 +567,6 @@ def expect_2op_2t(op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):
   
     
   
-    steadystate_time = taulist[-1]+taulist[1]
-    rhoss_steadystate = scp.integrate.solve_ivp(rhodot                   ,
-                                            t_span = (0,steadystate_time),
-                                            y0=rho0              ,
-                                            args=(Rdic,omega)        ,
-                                            method='DOP853'              ,
-                                            t_eval=np.append(taulist,steadystate_time) ,
-                                            rtol=opts.rtol               ,
-                                            atol=opts.atol).y[:,-1]                                                                 
    
  
     
@@ -665,14 +582,14 @@ def expect_2op_2t(op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):
     '''
     
 
-    one_op_rhoss_prod = [ op1[len(taulist)+i]                       \
+    one_op_rhoss_prod = [ op1[i]                       \
                           @ np.reshape(
                                 scp.integrate.solve_ivp(rhodot,
-                                                        t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
-                                                        y0=rhoss_steadystate               ,
+                                                        t_span = (0,tlist[-1])  ,
+                                                        y0=rho0               ,
                                                         args=(Rdic,omega)               ,
                                                         method='DOP853'         ,
-                                                        t_eval=(steadystate_time+tlist)            ,
+                                                        t_eval=(tlist)            ,
                                                         rtol=opts.rtol              ,
                                                         atol=opts.atol).y[:,i]       ,
                                         (op_dims,op_dims),order='F')  
@@ -691,7 +608,7 @@ def expect_2op_2t(op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):
     # print('Starting A States')
     for tdx, one_op_rhoss_single_t in enumerate(one_op_rhoss_prod): #First for loop to find the tau outputs for each t value
         #New "starting time"
-        initial_tau = steadystate_time+tlist[tdx]
+        initial_tau = tlist[tdx]
         
         # print('Filling column',tdx+1,'of',len(Bstates))
         one_op_rho_ss_unavg_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
@@ -710,7 +627,7 @@ def expect_2op_2t(op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):
         TIMES I WAS WEAK: 14
         '''
         
-        two_op_rho_ss_unavg[tdx,...] = op2[(len(taulist)+tdx):(2*len(taulist)+tdx)]@ one_op_rho_ss_unavg_tau_evolution
+        two_op_rho_ss_unavg[tdx,...] = op2[(tdx):(len(taulist)+tdx)]@ one_op_rho_ss_unavg_tau_evolution
     # print('found unaveraged A-States')   
     '''
     Okay so the output matrix from above is a bunch of 2x2 density matrices
@@ -767,17 +684,7 @@ def expect_4op_2t(op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):
         opts.rtol = 1e-8                                  #Relative tolerance
         opts.nsteps= 10e+6   
   
-    op_dims = np.shape(op1)[-1]  
-    
-    steadystate_time = taulist[-1]+taulist[1]
-    rhoss = scp.integrate.solve_ivp(rhodot                   ,
-                                            t_span = (0,steadystate_time),
-                                            y0=rho0              ,
-                                            args=(Rdic,omega)        ,
-                                            method='DOP853'              ,
-                                            t_eval=np.append(taulist,steadystate_time) ,
-                                            rtol=opts.rtol               ,
-                                            atol=opts.atol).y[:,-1]                                                                 
+    op_dims = np.shape(op1)[-1]                                                        
    
 
     
@@ -788,18 +695,18 @@ def expect_4op_2t(op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):
     Evolving one more period forward for averaging purposes
 
     '''
-    D_rhoss_A = [ op4[len(taulist)+i] @
+    D_rhoss_A = [ op4[i] @
                 np.reshape(
                     scp.integrate.solve_ivp(rhodot,
-                                            t_span = (steadystate_time,steadystate_time+tlist[-1])  ,
-                                            y0=rhoss                ,
+                                            t_span = (0,tlist[-1])  ,
+                                            y0=rho0                ,
                                             args=(Rdic,omega)               ,
                                             method='DOP853'         ,
-                                            t_eval=(steadystate_time+tlist)            ,
+                                            t_eval=(tlist)            ,
                                             rtol=opts.rtol              ,
                                             atol=opts.atol).y[:,i]       ,
                             (op_dims,op_dims),order='F')   
-                @ op1[len(taulist)+i]
+                @ op1[i]
                 for i in range(len(tlist))]
     
     '''
@@ -812,7 +719,7 @@ def expect_4op_2t(op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):
     unavgd_4op_rhoss   = np.zeros( (len( D_rhoss_A)         , len(taulist), op_dims,op_dims), dtype='complex_' ) 
     for tdx in range(len(tlist)): #First for loop to find the tau outputs for each t value
         #New "starting time"
-        initial_tau = steadystate_time+tlist[tdx]
+        initial_tau = tlist[tdx]
         
         
         
@@ -830,7 +737,7 @@ def expect_4op_2t(op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):
         
         
         
-        unavgd_4op_rhoss[tdx,...]   = (op2 @ op3)[(len(taulist)+tdx):(2*len(taulist)+tdx)] @ oper_state_tau_evolution
+        unavgd_4op_rhoss[tdx,...]   = (op2 @ op3)[(tdx):(len(taulist)+tdx)] @ oper_state_tau_evolution
        
     
     avgd_4op_rhoss   = np.mean(unavgd_4op_rhoss,axis=0)
@@ -839,9 +746,38 @@ def expect_4op_2t(op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):
    
     return expect4op2t
 
+def steadystate_time(c_op_mag,T):  
+    time_scale = (2*np.pi)/c_op_mag
+    
+    periods_required = int(np.ceil(time_scale/T))
+    
+    return periods_required
 
-
-
+def steadystate_rho(rho0,ss_time,Nt,Rdic,omega,T,opts = None):
+    
+    if opts == None:
+        opts = Options()                                  #Setting up the options used in the mode and state solvers
+        opts.atol = 1e-6                                  #Absolute tolerance
+        opts.rtol = 1e-8                                  #Relative tolerance
+        opts.nsteps= 10e+6  
+        
+    #Taulist Definition
+    Ntau = (Nt)*(ss_time)                                    
+    taume = ss_time*T                          
+    dtau = taume/Ntau                                 
+    taulist = np.linspace(0, taume-dtau, Ntau)       
+    steadystate_time = taulist[-1]+taulist[1]
+    
+    
+    rho_steadystate= scp.integrate.solve_ivp(rhodot                   ,
+                                            t_span = (0,steadystate_time),
+                                            y0=rho0              ,
+                                            args=(Rdic,omega)        ,
+                                            method='DOP853'              ,
+                                            t_eval=np.append(taulist,steadystate_time) ,
+                                            rtol=opts.rtol               ,
+                                            atol=opts.atol).y[:,-1]     
+    return rho_steadystate
 '''
 Misc functions that I don't wanna catagorize rn
 '''
@@ -859,162 +795,6 @@ def freqarray(T,Nt,tau):
     # omega_array = np.fft.fftshift(omega_array1)
     
     return omega_array
-
-
-def ket2super(rho0, basis1, basis2, spec=None, ft=None, qe=0, t=0):
-    """
-    Takes an input ket and turns it into a supervector in the desired basis
-
-    Parameters
-    ----------
-    rho0 : Qobj
-        The input state in the form of a ket or density matrix
-    basis1:
-        The basis in which the initial state rho0 is supplied. 
-        'comp' for computational basis or 'floq' for Floquet basis
-    basis2: 
-        The desired output basis of the function. 
-        'comp' for computational basis or 'floq' for Floquet basis
-    spec:
-        If 'floq' is an input, describes whether the Floquet MODE basis or
-        Floquet STATE basis is desired.
-        'mode' for mode basis, 'state' for state basis
-    ft :Qobj
-        The floquet modes at the desired time t of transformation. I think I set
-        this function up such that using a lookup table as an input should work.
-    qe :array
-        the quasieneries
-    t :float
-        the time at which the transformation is to be done
-
-    Returns
-    -------
-    rho0: a supervector in the desired basis at the specified time t
-
-    """
-    
-    #
-    # check initial state
-    #
-    if isket(rho0):
-        rho0 = rho0 * rho0.dag()
-    
-    #
-    # Uncapitalizing any inputs
-    #
-    basis1 = basis1.lower()
-    basis2 = basis2.lower()
-    if spec != None:
-        spec = spec.lower()
-    
-    #
-    # Solving for the density matrix in the desired basis
-    #
-    if basis1 != basis2:
-        if basis2 == 'comp':
-            direction = True
-        elif basis2 == 'floq':
-            direction = False
-        else:
-            print('not an acceptable basis')
-            return None
-        
-        #assumes the mode is desired if nothing is specified in the 'spec' argument
-        if spec == 'mode' or spec == None:
-            qe = np.zeros_like(range(ft[0].shape[0]))
-        else:
-            qe = qe
-            
-        dims1 = ft[0].dims
-        shape1 = ft[0].shape
-        #The exponential goes to 1 if the modes are desired, per the above if/else
-        fmt = [Qobj(ft[i]*np.exp(-1j*qe[i]*t),dims=dims1,shape=shape1) for i in list(range(ft[0].shape[0]))]
-
-        rho0 = rho0.transform(fmt,direction)
-
-
-    elif basis1 == basis2:
-      rho0=rho0 
-      
-    #
-    #moving from a density matrix to a super vector
-    #
-    rho0 = operator_to_vector(rho0)
-    
-    return rho0
-
-def super2ket(rho0, basis1, basis2, spec=None, ft=None, qe=0, t=0):
-    """
-    Takes an input supervector and turns it into a density matrix in the desired basis
-
-    Parameters
-    ----------
-    rho0 : Qobj
-        The input state in the form of a ket or density matrix
-    basis1:
-        The basis in which the initial state rho0 is supplied. 
-        'comp' for computational basis or 'floq' for Floquet basis
-    basis2: 
-        The desired output basis of the function. 
-        'comp' for computational basis or 'floq' for Floquet basis
-    spec:
-        If 'floq' is an input, describes whether the Floquet MODE basis or
-        Floquet STATE basis is desired.
-        'mode' for mode basis, 'state' for state basis
-    fmt :Qobj
-        The floquet modes at the desired time t of transformation
-    qe :array
-        the quasieneries
-    t :float
-        the time at which the transformation is to be done
-
-    Returns
-    -------
-    rho0: a density matrix in the desired basis at the specified time t
-
-    """
-    #
-    # Uncapitalizing any inputs
-    #
-    basis1 = basis1.lower()
-    basis2 = basis2.lower()
-    if spec != None:
-        spec = spec.lower()
-    
-    #
-    #moving from a density matrix to a super vector
-    #
-    rho0 = vector_to_operator(rho0)
-    
-    #
-    # Solving for the density matrix in the desired basis
-    #
-    if basis1 != basis2:
-        if basis2 == 'comp':
-            direction = True
-        elif basis2 == 'floq':
-            direction = False
-        else:
-            print('not an acceptable basis')
-            return None
-        
-        #assumes the mode is desired if nothing is specified in the 'spec' argument
-        if spec == 'mode' or spec == None:
-            qe = np.zeros_like(range(ft[0].shape[0]))
-        else:
-            qe = qe
-            
-        dims1 = ft[0].dims
-        shape1 = ft[0].shape
-        #In here, the exponential goes to 1 if the mode is desired, per the if/else directly above
-        fmt = [Qobj(ft[i]*np.exp(-1j*qe[i]*t),dims=dims1,shape=shape1) for i in list(range(ft[0].shape[0]))]
-        rho0 = rho0.transform(fmt,direction)
-    
-        
-    elif basis1 == basis2:
-      rho0=rho0 
-    
-    return rho0
 
 
 def mat(i,j):
@@ -1185,54 +965,6 @@ def f_states_table(f0, qe, tlist, taulist, H=None, T=None, args=None, fmodest=No
         
     return fstates
 
-
-def transformF(rho, inpt,inverse = False,Sparse = True):
-    """
-    The purpose of this function is to take the input in one basis and transform
-    it to the basis defined by the input basis inpt
-    
-    Parameters
-    ----------
-    
-    inpt:
-        the input basis states
-    inverse:
-        not useful YET. Leaving it in to make it so I don't have to rewrite things.
-        Might use it later to specificy whether I'm going into or out of the basis 
-        defined by inpt
-    Sparse:
-        Same as above, except this option is to use sparse matrices. Again,
-        might write this in later if I feel nice
-
-
-    Returns
-    -------
-    oper:
-        operator in new basis
-
-    """    
-       
-    #First thing is to figure out how large the input basis state list is
-    l = len(inpt)
-    #Next I'll create a dictionary with the basis vectors
-    d= {}
-    for i in range(l):
-        d[i] = inpt[i].full()
-        
-    #Finally, I'll hstack the dictionary to create the basis change matrix V
-    V = Qobj(np.hstack(d[i] for i in range(l)).T)
-    
-    
-    #Next, take the input vector or operator and change the basis
-    if rho.isket == True:
-        oper = V.dag()*rho
-    elif rho.isoper == True:
-        oper = V.dag()*rho*V
-    else:
-        oper = []
-        print("Something went wrong. Supply a proper ket or operator!")
-    
-    return oper
 
 
 def reorder(M,state0mat = None):
