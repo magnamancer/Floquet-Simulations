@@ -13,9 +13,11 @@ import matplotlib.cm as cm
 import matplotlib.colors
 from qutip import *
 import time
+
 '''
 Defining the Dot
 '''
+
 norm = np.sqrt(2)
 states = [0,0,2*np.pi*280,2*np.pi*(280+1e-7)] #Resonance arbitrarily decided
 dipole = {(0,2):(1/norm,-1j/norm,0),(1,3):(1/norm,1j/norm,0)}
@@ -279,7 +281,7 @@ ZMavg = np.array(ZMavg)
 # fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}" )
 
 
-freqlims = [-0.01,0.02]#[omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]
+freqlims = [-0.02,0.02]#[omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]
 
 
 frequency_range = (omega_array-(Exp.beat/2)/(2*np.pi))

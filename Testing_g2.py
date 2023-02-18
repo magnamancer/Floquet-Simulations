@@ -54,7 +54,7 @@ c_op_lc = FC.LowOp(collapse_operator_leftcirc,manifolds_collapse_rate)
 c_op_rc = FC.LowOp(collapse_operator_rightcirc,manifolds_collapse_rate)
 
 
-electron_spin_flip_rate_percent = 100
+electron_spin_flip_rate_percent = 20
 electron_spin_flip_rate = manifolds_collapse_rate*(electron_spin_flip_rate_percent/100)
 
 collapse_operator_S_plus = \
@@ -124,14 +124,14 @@ LP = {
 
 
 
-tau = 6000#Length of time to go forward, in units of T, the system Frequency
+tau = 1000#Length of time to go forward, in units of T, the system Frequency
 Nt = 2**5 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
 
 point_spacing = 0.0001
-detuning0 = -.000
+detuning0 = -.002
 
 
 power_range = 1
@@ -142,7 +142,7 @@ for i in range(power_range):
 
 start_time = time.time()
 
-Bpower = 0e-2  
+Bpower = 6e-2  
 for idz, val in enumerate(P_array):
     print('working on spectra',idz+1,'of',len(P_array))
    
@@ -181,7 +181,7 @@ for idz, val in enumerate(P_array):
     
    
     
-    Exp = FC.QSys(dot,L2,L1,Bfield = B,c_op_list = collapse_operator_list)
+    Exp = FC.QSys(dot,[L2,L1],Bfield = B,c_op_list = collapse_operator_list)
     
 
     if idz == 0:
