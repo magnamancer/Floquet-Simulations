@@ -1088,7 +1088,7 @@ class QSys:
         
         '''      
 
-        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist,taulist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
 
         Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
         print('Built R(t)')
