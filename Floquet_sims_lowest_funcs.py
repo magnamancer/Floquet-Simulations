@@ -11,7 +11,7 @@ import scipy as scp
 This script contains 'lowest-level' definition functions that are called
     by many things in the actual module
 '''
-################### Here I'm defining "lowest-level" stuff #########
+################### Floquet mode and state solver Functions ############
 
 def floquet_modes2(H, T, args=None, sort=False, U=None, options=None):
     """
@@ -157,8 +157,7 @@ def floquet_modes_table2(f_modes_0, f_energies, tlist, H, T, args=None, options=
     return f_modes_table_t
 
 '''
-Below are some meatier functions used for time evolution purposes,
-primarily
+PREPWORK SHOULD BE MOVED TO 2ND LEVEL
 
 '''
 def prepWork(H,T,args,tlist,taulist=None, ss_time = None, opts = None):
