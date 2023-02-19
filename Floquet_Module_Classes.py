@@ -4,12 +4,15 @@ Created on Wed Aug 17 12:33:00 2022
 
 @author: FentonClawson
 """
-import numpy as np
-from qutip import *
-import emisspecmoduleF as esm 
-import scipy as scp
-import FloqClassestesting as FC
 
+from qutip import *
+
+import Floquet_sims_lowest_module as flm
+import Floquet_sims_mid_module as fmm
+import Floquet_Module_Classes as FC
+
+import numpy as np
+import scipy as scp
 import itertools
 import math
 
@@ -20,6 +23,18 @@ get_ipython().run_line_magic('matplotlib', 'qt')
 
 class Laser:
     def __init__(self,magnitude,pol,freq):
+        '''
+        Parameters
+        ----------
+        magnitude : float
+            strength of the laser.
+        pol : numpy.ndarray
+            normalized polarization vector given as [x,y,z].
+        freq : float
+            frequency of the laser.
+
+        '''
+        
         self.magnitude = magnitude
         self.pol = pol
         self.freq = freq
@@ -28,31 +43,107 @@ class Laser:
 
 class Bfield:
     def __init__(self,Bvec):
-        self.Bvec = Bvec #A vector [Bx,By,Bz] of the magnetic field magnitude in each direction [x,y,z]
+        '''
+
+        Parameters
+        ----------
+        Bvec : list
+            list of [perp,parallel] strengths of the magnetic field. 
+            Maybe I should write in the x and y differences at some point? 
+            Physically the same, but I bet there's something going on with
+            phase there or something.'
+
+        '''
+        self.Bvec = Bvec 
         
-class LowOp:
+class Collapse_Op:
     def __init__(self,mat,mag):
+        '''
+        
+
+        Parameters
+        ----------
+        mat : numpy.ndarray
+            Matrix representation of the collapse operator
+        mag : numpy.float64
+            the rate/strength/magnitude of the collapse operator.
+
+        Returns
+        -------
+        None.
+
+        '''
         self.mat = mat #The matrix form of the lowering operator
         self.mag = mag
 
 class QD:
     def __init__(self,Hdim,states,dipoles,gfactors = None):
+        '''
+        This object is the representation of the quantum dot. It requires
+            information on system dimensionality, states, as well as 
+            the dipoles of the system and (optionally) the g-factors of
+            each (NEEDS TO BE INITIALLY DEGENERATE) pair of degenerate states
+            (i.e each energetically degenerate but spin-differentiable state)
+
+        Parameters
+        ----------
+        Hdim : int
+            Dimensionality of the Quantum Dot System.
+        states : list
+            List of energies of the system.
+        dipoles : dict
+            dictionary of dipole moment states linkages (as tuples) as keys and their associated polarization(s) in the dot (as tuple values).
+            
+        gfactors : An ENERGETICALLY ORDERED list of gfactors of each degnerate (spin-distinguishable) state as [g_parallel,g_perp].
+                   optional. The default is None.
+
+        '''
         self.Hdim = Hdim #Dimension of the system
-        self.states = states #List of energies of the system, with the ASSUMPTION THAT THERE ARE ONLY TWO ENERGETIC STATES
-        self.dipoles = dipoles #dictionary of dipole moment states linkages (as tuples) as keys and their associated polarization(s) in the dot (as tuplevalues)
-        self.gfactors = gfactors #An ENERGETICALLY ORDERED list of gfactors of each degnerate (spin-distinguishable) state as [g_parallel,g_perp].
-                                 #E.g. for the system in Ned's 2015 paper, the gfactor list would be [[g_(electron,para),g_(electron,perp)],[g_(hole,para),g_(hole,perp)]]
+        self.states = states #
+        self.dipoles = dipoles #
+        self.gfactors = gfactors         
         self.fss = None #Optional propery "fss," the fine structure splitting of states. Given as a dictionary with the bare energies as keys and the fss amount as values.  
     def lowering_operator(self):
         '''
         Creates the lowering operator of the QD based on the 
         system dimensionality and the states linked by the dipole moments
+
+        Returns
+        -------
+        lowering_operator : Qobj
+            Lowering operator of the system
+
         '''
+
         
         return Qobj(sum([np.eye(1, self.Hdim * self.Hdim, k=(i) * self.Hdim + j).reshape(self.Hdim, self.Hdim) for i,j in self.dipoles]))
 
 class QSys:
-    def __init__(self,QD,LasList =[], Bfield = None, c_op_list = None):
+    def __init__(self,QD,LasList, Bfield = None, c_op_list = None):
+        '''
+        
+
+        Parameters
+        ----------
+        QD : QD Object
+            Quantum Dot of the system.
+        LasList : List of Laser Objects
+            Laser object(s) applied to the system. Need at least 1, as this IS
+            Floquet theory.
+        Bfield : Bfield Object, optional
+            Magnetic field object if a magnetic field is desired. 
+            The default is None.
+        c_op_list : list of collapse operator objects, optional
+           List of collapse operators, defining how the system
+           interacts with the environment. If none, unitary
+           evolution is desired. 
+           The default is None.
+
+        Returns
+        -------
+        Qsys, a quantum system upon which experiments
+
+        '''
         self.LasList = LasList
         self.Bfield = Bfield
         self.QD = QD
@@ -77,14 +168,23 @@ class QSys:
         self.Delta = self.QD.states[-1]-self.Lavg                             #Average Detuning of the lasers from the excited state
 
         self.Hargs = {'w': (self.beat/2)}                                             #Characteristic frequency of the Hamiltonian is half the beating frequency of the Hamiltonian after the RWA. QuTiP needs it in Dictionary form.
-       
-                    
-    ############## Hamiltonian parameters ########################################
-    
-    '''
-    Total Hamiltonian Definition, for use in calculating pretty much everything
-    '''
+
+############################################################################### 
+###############################################################################                    
+######################### Hamiltonian Construction ############################
+###############################################################################  
+###############################################################################  
+
     def Ham(self):
+        '''
+        Total Hamiltonian Definition, for use in calculating pretty much everything
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        '''
         if self.Bfield == None:
             w,v = np.linalg.eig(np.identity(self.QD.Hdim))
         if self.Bfield != None:
@@ -99,7 +199,7 @@ class QSys:
         
             
         
-        v,CorrPerms = esm.reorder(v)
+        v,CorrPerms = flm.reorder(v)
         self.v = Qobj(v)
         
      
@@ -124,13 +224,25 @@ class QSys:
         
         return H
   
-    
-    '''
-    Creating a method to define the laser Hamiltonian(s) in the RWA
-    '''
    
    
     def LasHam(self):
+        '''
+        Laser portion of the Hamiltonian. Semi-analytically calculated
+            the laser Hamiltonian in the Rotating Wave Approximation, which 
+            itself is a specific application of the more general secular 
+            approximation
+            
+            NOTE: The RWA and the secular approximation that's used to create
+                      the collapse operator rate matrices are DIFFERENT
+                      approximations.'
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        '''
         
         '''
         The first step is to define all of the Rabi frequencies
@@ -214,10 +326,17 @@ class QSys:
         return Qobj(np.round(self.forwardrot,10)), Qobj(np.round(self.backwardrot,10))
 
     
-    '''
-    Defining the Atomic Hamiltonian in the RWA
-    '''
+
     def AtomHam(self):
+        '''
+        Atomic Hamiltonian portion of Hamiltonian
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        '''
         self.AtomHammy = np.zeros((self.QD.Hdim,self.QD.Hdim),dtype='complex')
         N = len(self.QD.states)
         eta = np.zeros(self.QD.Hdim)
@@ -232,10 +351,17 @@ class QSys:
         return Qobj(np.round(self.AtomHammy,10))
     
     
-    '''
-    Defining the Zeeman Hamiltonian
-    '''
+
     def ZHam(self):
+        '''
+        (Optional) Zeeman Hamiltonian term in the Hamiltonian
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        '''
         self.ZHammy = np.zeros((self.QD.Hdim,self.QD.Hdim),dtype='complex')
         if self.Bfield != None:
             Count = 0 #initializing a counter to iterate through the g factor list
@@ -270,11 +396,66 @@ class QSys:
         
         
         
-    '''
-    Various time evolution methods below
-    '''
+    
+############################################################################### 
+###############################################################################                    
+######################## Operator Expectation Values ##########################
+###############################################################################  
+###############################################################################     
+    def steadystate_rho(self,rho0,ss_time,Nt,args,T,opts = None):
+        '''
         
-    def expect_1op_1t(oper,rho0,tlist,Rdic,omega, taulist = None, opts = None):
+
+        Parameters
+        ----------
+        rho0 : vector numpy.ndarray
+            initial state rho0.
+        ss_time : int
+            the WHOLE NUMBER OF PERIODS forward at which the steady state
+            is calculated to occur. from steadystate_time
+        Nt : int
+            Number of evenly space points in one time period of the Hamiltonian. Should probably be a power of 2.
+        Rdic : Dic
+            Hdim**2 by Hdim**2 matrix values, with variable number of keys depending on selected time-dependance.
+            Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
+        omega : float
+            time period of the Hamiltonian
+        T : float
+            period of the Hamiltonian
+        opts : options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
+
+        Returns
+        -------
+        rho_steadystate : TYPE
+            DESCRIPTION.
+
+        '''
+        if opts == None:
+            opts = Options()                                  #Setting up the options used in the mode and state solvers
+            opts.atol = 1e-6                                  #Absolute tolerance
+            opts.rtol = 1e-8                                  #Relative tolerance
+            opts.nsteps= 10e+6  
+            
+        #Taulist Definition
+        Ntau = (Nt)*(ss_time)                                    
+        taume = ss_time*T                          
+        dtau = taume/Ntau                                 
+        taulist = np.linspace(0, taume-dtau, Ntau)       
+        steadystate_time = taulist[-1]+taulist[1]
+        
+        
+        rho_steadystate= scp.integrate.solve_ivp(flm.rhodot                   ,
+                                                t_span = (0,steadystate_time),
+                                                y0=rho0              ,
+                                                args=args        ,
+                                                method='DOP853'              ,
+                                                t_eval=np.append(taulist,steadystate_time) ,
+                                                rtol=opts.rtol               ,
+                                                atol=opts.atol).y[:,-1]     
+        return rho_steadystate
+    
+    def expect_1op_1t(self,oper,rho0,tlist,Rdic,omega, taulist = None, opts = None):
         '''
         for finding <op1(t)>
     
@@ -291,10 +472,10 @@ class QSys:
         Rdic : Dic
             Hdim**2 by Hdim**2 matrix values, with variable number of keys depending on selected time-dependance.
             Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
-        omega : float??
+        omega : float
             time period of the Hamiltonian
-        opts : TYPE, optional
-            optional arguments for solve_ivp solvers. The default is None.
+        opts : Options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
     
         Returns
         -------
@@ -325,7 +506,7 @@ class QSys:
         
         op_rho_ss_unavg = [ (oper[i])                       \
                       @ np.reshape(
-                            scp.integrate.solve_ivp(rhodot                       ,
+                            scp.integrate.solve_ivp(flm.rhodot                       ,
                                                     t_span = (0,tlist[-1])   ,
                                                     y0=rho0                 ,
                                                     args=(Rdic,omega)           ,
@@ -345,7 +526,7 @@ class QSys:
                
                
                 rho_ss_tau_evolve = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
-                                                    rhodot,
+                                                    flm.rhodot,
                                                     t_span = (initial_tau,initial_tau+taulist[-1]), 
                                                     y0=np.reshape(op_rho_ss_unavg[tdx],(op_dims**2,),order='F'),
                                                     args=(Rdic,omega),
@@ -374,7 +555,7 @@ class QSys:
         return one_op_one_time_expect
     
      
-    def expect_2op_2t(op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):  
+    def expect_2op_2t(self,op1,op2,rho0,tlist,taulist,Rdic,omega,opts = None):  
         '''
         for finding <op1(t) op2(t+tau)>
     
@@ -395,8 +576,8 @@ class QSys:
             Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
         omega : float??
             time period of the Hamiltonian
-        opts : TYPE, optional
-            optional arguments for solve_ivp solvers. The default is None.
+        opts : Options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
     
         Returns
         -------
@@ -436,7 +617,7 @@ class QSys:
     
         one_op_rhoss_prod = [ op1[i]                       \
                               @ np.reshape(
-                                    scp.integrate.solve_ivp(rhodot,
+                                    scp.integrate.solve_ivp(flm.rhodot,
                                                             t_span = (0,tlist[-1])  ,
                                                             y0=rho0               ,
                                                             args=(Rdic,omega)               ,
@@ -464,7 +645,7 @@ class QSys:
             
             # print('Filling column',tdx+1,'of',len(Bstates))
             one_op_rho_ss_unavg_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
-                                                rhodot,
+                                                flm.rhodot,
                                                 t_span = (initial_tau,initial_tau+taulist[-1]), 
                                                 y0=np.reshape(one_op_rhoss_single_t,(op_dims**2,),order='F'),
                                                 args=(Rdic,omega),
@@ -495,7 +676,7 @@ class QSys:
         
         return two_op_two_time_expect
     
-    def expect_4op_2t(op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):  
+    def expect_4op_2t(self,op1,op2,op3,op4,rho0,tlist,taulist,Rdic,omega,opts = None):  
         '''
         for finding <A(t0)*B(t1)*C(t1)*D(t0)>
     
@@ -520,8 +701,8 @@ class QSys:
             Dictionary of time-dependances, built from the system collapse operators in the Floquet basis
         omega : float??
             time period of the Hamiltonian
-        opts : TYPE, optional
-            optional arguments for solve_ivp solvers. The default is None.
+        opts : Options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
     
         Returns
         -------
@@ -549,7 +730,7 @@ class QSys:
         '''
         D_rhoss_A = [ op4[i] @
                     np.reshape(
-                        scp.integrate.solve_ivp(rhodot,
+                        scp.integrate.solve_ivp(flm.rhodot,
                                                 t_span = (0,tlist[-1])  ,
                                                 y0=rho0                ,
                                                 args=(Rdic,omega)               ,
@@ -576,7 +757,7 @@ class QSys:
             
             
             oper_state_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
-                                                rhodot,
+                                                flm.rhodot,
                                                 t_span = (initial_tau,initial_tau+taulist[-1]), 
                                                 y0=np.reshape(D_rhoss_A[tdx],(op_dims**2,),order='F'),
                                                 args=(Rdic,omega),
@@ -597,10 +778,51 @@ class QSys:
         expect4op2t = np.trace( avgd_4op_rhoss  , axis1=1, axis2=2)
        
         return expect4op2t
+
     
-    def ExciteSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]),opts = None):       
-            ############### Time evolving rho0 with solve_ivp#########################
+############################################################################### 
+###############################################################################                    
+############## Things Built FROM Operator Expectation Values ##################
+###############################################################################  
+###############################################################################     
+    
+    def ExciteSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]),opts = None): 
+        '''
         
+
+        Parameters
+        ----------
+        Nt : int
+            Number of evenly space points in one time period of the Hamiltonian. Should probably be a power of 2.
+        tau : doesn't have to be int, but should probably be a whole number.
+            Number of periods of evolution being sumlated.
+        rho0 : vector numpy.ndarray
+            initial state rho0 in the computational basis.
+        time_sense : float 0-1, optional
+            the time sensitivity/secular approximation restriction for this rate
+                matrix as a multiple of the system frequency beatfreq. As far as 
+                Ned and I have guessed (cause we aren't positive),0 is completely 
+                time independant and in line with, e.g. Blumel's R tensor 
+                description (sure of this) and 1 is completely time dependant 
+                (unsure of this) as it's taking terms on the order
+                of 1*omega. The default is 0.
+        detpols : list
+            List of desired detection polarizations. If none are specified,
+            "unpolarized" detection is formed by summing the results of the two
+            linear components of emission. 
+            The default is np.array([None,None,None]).
+        opts : Options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
+
+
+
+        Returns
+        -------
+        excitevals : Dic
+        Dictionary of {detection polarizaion:excitation value} entries
+
+        '''
+            ############### Time evolving rho0 with solve_ivp#########################
         
         
         
@@ -623,18 +845,18 @@ class QSys:
         dtau = dt                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
-        ss_time = esm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
+        ss_time = fmm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         # print('found f0, qe, f_states_all_periods')
         
         
         
-        lowop_floquet_fourier_amps_list = esm.floquet_fourier_amps(Nt,tlist,taulist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)       
-        Rdic = esm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)       
+        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
         # print('Built R(t)')
 
 
-        lowop_detection_polarization_modified_list =  esm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
         # print('set detection polarization')
         
 
@@ -654,14 +876,52 @@ class QSys:
             
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
-            rho_steadystate = esm.steadystate_rho(rho0_floquet,ss_time,Nt,Rdic,self.beat/2,self.T)
-            excitevals[detpols[Ldx]] = esm.expect_1op_1t(pop_op,rho_steadystate,tlist,Rdic,self.beat/2,opts = opts)
+            rho_steadystate = self.steadystate_rho(rho0_floquet,ss_time,Nt,args = (Rdic,self.beat/2),T = self.T)
+            excitevals[detpols[Ldx]] = self.expect_1op_1t(pop_op,rho_steadystate,tlist,Rdic,self.beat/2,opts = opts)
             
             # print('Finished Detpol',detpols[Ldx])
         print('Finished excitation spectrum')  
         return  excitevals
     
     def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False', opts = None):       
+        '''
+        
+
+        Parameters
+        ----------
+        Nt : int
+            Number of evenly space points in one time period of the Hamiltonian. Should probably be a power of 2.
+        tau : doesn't have to be int, but should probably be a whole number.
+            Number of periods of evolution being sumlated.
+        rho0 : vector numpy.ndarray
+            initial state rho0 in the computational basis.
+        time_sense : float 0-1, optional
+            the time sensitivity/secular approximation restriction for this rate
+                matrix as a multiple of the system frequency beatfreq. As far as 
+                Ned and I have guessed (cause we aren't positive),0 is completely 
+                time independant and in line with, e.g. Blumel's R tensor 
+                description (sure of this) and 1 is completely time dependant 
+                (unsure of this) as it's taking terms on the order
+                of 1*omega. The default is 0.
+        detpols : list
+            List of desired detection polarizations. If none are specified,
+            "unpolarized" detection is formed by summing the results of the two
+            linear components of emission. 
+            The default is np.array([None,None,None]).
+        retg1 : Boolean, optional
+            If yes, the g1 function corresponding to the evolution over
+            tau is returned.I PROBABLY NEED TO CHANGE SOMETHING IN HERE NOW
+            THAT I'VE IMPLIMENTED THE STEADYSTATE SOLVER. DON'T FORGET TO COME
+            BACK HERE FENTON. The default is 'False'.
+        opts : Options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        '''
         ############### Time evolving rho0 with solve_ivp#########################
         
              
@@ -697,21 +957,21 @@ class QSys:
         taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
 
         
-        ss_time = esm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
+        ss_time = fmm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         
 
                
-        lowop_floquet_fourier_amps_list = esm.floquet_fourier_amps(Nt,tlist,taulist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
 
-        Rdic = esm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
+        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
 
         
         
         '''
         Looping over detection polarizations, to hopefully make things faster
         '''
-        lowop_detection_polarization_modified_list =  esm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
            
         
         
@@ -728,8 +988,8 @@ class QSys:
             
             
             
-            rho_steadystate = esm.steadystate_rho(rho0_floquet,ss_time,Nt,Rdic,self.beat/2,self.T)
-            g1 = esm.expect_2op_2t(sys_f_low, sys_f_raise, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
+            rho_steadystate = self.steadystate_rho(rho0_floquet,ss_time,Nt,args = (Rdic,self.beat/2),T = self.T)
+            g1 = self.expect_2op_2t(sys_f_low, sys_f_raise, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
             
             if retg1 == 'True':
                 g1dic[detpols[Ldx]] = g1
@@ -747,6 +1007,40 @@ class QSys:
         
             
     def g2_tau(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), opts = None):
+        '''
+        Parameters
+        ----------
+        
+        Nt : int
+            Number of evenly space points in one time period of the Hamiltonian. Should probably be a power of 2.
+        tau : doesn't have to be int, but should probably be a whole number.
+            Number of periods of evolution being sumlated.
+        rho0 : vector numpy.ndarray
+            initial state rho0 in the computational basis.
+        time_sense : float 0-1, optional
+            the time sensitivity/secular approximation restriction for this rate
+                matrix as a multiple of the system frequency beatfreq. As far as 
+                Ned and I have guessed (cause we aren't positive),0 is completely 
+                time independant and in line with, e.g. Blumel's R tensor 
+                description (sure of this) and 1 is completely time dependant 
+                (unsure of this) as it's taking terms on the order
+                of 1*omega. The default is 0.
+        detpols : list
+            List of desired detection polarizations. If none are specified,
+            "unpolarized" detection is formed by summing the results of the two
+            linear components of emission. 
+            The default is np.array([None,None,None]).
+        opts : Options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
+
+        Returns
+        -------
+        g2func : np.ndarray
+            the 1d array of g2 values for all times tau in taulist.
+        taulist : np.ndarray
+            The tau list over which g2(t,t+tau) is calculated.
+
+        '''
         ############### Time evolving rho0 with solve_ivp#########################
         
         
@@ -781,8 +1075,8 @@ class QSys:
         taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
 
         
-        ss_time = esm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= esm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
+        ss_time = fmm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         
         print('found f0, qe, f_states_all_periods')
                
@@ -794,16 +1088,16 @@ class QSys:
         
         '''      
 
-        lowop_floquet_fourier_amps_list = esm.floquet_fourier_amps(Nt,tlist,taulist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist,taulist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
 
-        Rdic = esm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
+        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
         print('Built R(t)')
         
         
         '''
         Looping over detection polarizations, to hopefully make things faster
         '''
-        lowop_detection_polarization_modified_list =  esm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
            
     
         g2func = {}
@@ -814,11 +1108,11 @@ class QSys:
             pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
 
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
-            rho_steadystate = esm.steadystate_rho(rho0_floquet,ss_time,Nt,Rdic,self.beat/2,self.T)
+            rho_steadystate = self.steadystate_rho(rho0_floquet,ss_time,Nt,args = (Rdic,self.beat/2),T = self.T)
             
 
-            g2_denom_expect = esm.expect_1op_1t(pop_op, rho_steadystate, tlist,  Rdic, self.beat/2,taulist=taulist)
-            g2_numer_expect = esm.expect_4op_2t(sys_f_raise, sys_f_raise, sys_f_low, sys_f_low, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
+            g2_denom_expect = self.expect_1op_1t(pop_op, rho_steadystate, tlist,  Rdic, self.beat/2,taulist=taulist)
+            g2_numer_expect = self.expect_4op_2t(sys_f_raise, sys_f_raise, sys_f_low, sys_f_low, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
                 
             '''
             Taking t = 0 as "statistically stationary" or w/e it's called means 
@@ -827,10 +1121,34 @@ class QSys:
             ''' 
             g2func[detpols[Ldx]] = np.array([g2_numer_expect[taudx]/(g2_denom_expect[0] * g2_denom_expect[taudx]) for taudx in range(len(taulist))])
             print('finished',detpols[Ldx])
-        return g2func, taulist      
+        return g2func, taulist  
+    
+############################################################################### 
+###############################################################################                    
+################### Misc, or Unused but could be useful #######################
+###############################################################################  
+###############################################################################              
             
-            
-    def loFFTplot(self,low_op,Nt):  
+    def loFFTplot(self,c_op_list,Nt):  
+        '''
+        
+
+        Parameters
+        ----------
+        c_op_list : list of collapse operator objects, optional
+           List of collapse operators, defining how the system
+           interacts with the environment. If none, unitary
+           evolution is desired. 
+           The default is None.
+        Nt : int
+            Number of evenly space points in one time period of the Hamiltonian. Should probably be a power of 2.
+
+
+        Returns
+        -------
+       BROKEN RIGHT NOW. ONLY WORKS FOR ONE COLLAPSE OPERATOR UNTIL I (FENTON) ADD A LOOP SOMEWHERE
+
+        '''
         
         timet = self.T                                     #Length of time of tlist defined to be one period of the system
         dt = timet/Nt                                      #Time point spacing in tlist
@@ -870,6 +1188,19 @@ class QSys:
     
     
     def TransitionEnergies(self):  
+        '''
+        
+
+        Returns
+        -------
+        np.ndarray
+            a numpy array of transition energies calculated from the Zeeman Hamiltonian
+            tranformation on the Atomic Hamiltonian. Only useful in its current form to
+            Fenton for bugtesting, but could be fleshed out to retrieve transition
+            energies from any given atomic Hamiltonian. Wouldn't be hard but I'm
+            feeling lazy right now. -Fenton
+
+        '''
         aa = self.Ham()
         
         

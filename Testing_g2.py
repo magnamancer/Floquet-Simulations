@@ -12,14 +12,18 @@ Created on Sat Nov 26 14:21:03 2022
 @author: FentonClawson
 """
 
-import FloqClassestesting as FC
+from qutip import *
+import time
 import numpy as np
-import emisspecmoduleF as esm 
+
+import Floquet_sims_lowest_module as flm
+import Floquet_sims_mid_module as fmm
+import Floquet_Module_Classes as FC
+
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors
-from qutip import *
-import time
+
 '''
 Defining the Dot
 '''
@@ -50,8 +54,8 @@ collapse_operator_rightcirc = \
                                   [0, 0, 0 , 0],
                                   [0, 0, 0 , 0]])
 
-c_op_lc = FC.LowOp(collapse_operator_leftcirc,manifolds_collapse_rate)
-c_op_rc = FC.LowOp(collapse_operator_rightcirc,manifolds_collapse_rate)
+c_op_lc = FC.Collapse_Op(collapse_operator_leftcirc,manifolds_collapse_rate)
+c_op_rc = FC.Collapse_Op(collapse_operator_rightcirc,manifolds_collapse_rate)
 
 
 electron_spin_flip_rate_percent = 20
@@ -71,8 +75,8 @@ collapse_operator_S_minus =\
                                   [0, 0, 0 , 0],
                                   [0, 0, 0 , 0]])
                             
-c_op_sp = FC.LowOp(collapse_operator_S_plus,electron_spin_flip_rate)
-c_op_sm = FC.LowOp(collapse_operator_S_minus,electron_spin_flip_rate)
+c_op_sp = FC.Collapse_Op(collapse_operator_S_plus,electron_spin_flip_rate)
+c_op_sm = FC.Collapse_Op(collapse_operator_S_minus,electron_spin_flip_rate)
 
 
 collapse_operator_list = [c_op_lc,
@@ -185,7 +189,7 @@ for idz, val in enumerate(P_array):
     
 
     if idz == 0:
-        omega_array = esm.freqarray(Exp.T,Nt,tau)  
+        omega_array = flm.freqarray(Exp.T,Nt,tau)  
         Transitions = Exp.TransitionEnergies()
         transX1=(abs(Transitions[2]-Transitions[0]))
         transX2=(abs(Transitions[3]-Transitions[1]))
