@@ -402,7 +402,7 @@ class QSys:
 ######################## Operator Expectation Values ##########################
 ###############################################################################  
 ###############################################################################     
-    def steadystate_rho(self,rho0,ss_time,Nt,args,T,opts = None):
+    def rho_time_evol(self,rho0,Nt,args,T,evol_time,opts = None):
         '''
         
 
@@ -438,8 +438,8 @@ class QSys:
             opts.nsteps= 10e+6  
             
         #Taulist Definition
-        Ntau = (Nt)*(ss_time)                                    
-        taume = ss_time*T                          
+        Ntau = (Nt)*(evol_time)                                    
+        taume = evol_time*T                          
         dtau = taume/Ntau                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         steadystate_time = taulist[-1]+taulist[1]
@@ -786,7 +786,7 @@ class QSys:
 ###############################################################################  
 ###############################################################################     
     
-    def ExciteSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]),opts = None): 
+    def ExciteSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]),evol_time = None, opts = None): 
         '''
         
 
@@ -845,7 +845,7 @@ class QSys:
         dtau = dt                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
-        ss_time = fmm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
         f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         # print('found f0, qe, f_states_all_periods')
         
@@ -876,14 +876,14 @@ class QSys:
             
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
-            rho_steadystate = self.steadystate_rho(rho0_floquet,ss_time,Nt,args = (Rdic,self.beat/2),T = self.T)
+            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
             excitevals[detpols[Ldx]] = self.expect_1op_1t(pop_op,rho_steadystate,tlist,Rdic,self.beat/2,opts = opts)
             
             # print('Finished Detpol',detpols[Ldx])
         print('Finished excitation spectrum')  
         return  excitevals
     
-    def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False', opts = None):       
+    def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False', evol_time = None, opts = None):       
         '''
         
 
@@ -957,7 +957,7 @@ class QSys:
         taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
 
         
-        ss_time = fmm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
         f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         
 
@@ -987,12 +987,8 @@ class QSys:
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
             
             
-            
-            rho_steadystate = self.steadystate_rho(rho0_floquet,ss_time,Nt,args = (Rdic,self.beat/2),T = self.T)
+            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
             g1 = self.expect_2op_2t(sys_f_low, sys_f_raise, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
-            
-            if retg1 == 'True':
-                g1dic[detpols[Ldx]] = g1
             
             spec = np.fft.fftshift(np.fft.fft(g1,axis=0))
     
@@ -1000,13 +996,138 @@ class QSys:
         
             print('Finished Detpol',detpols[Ldx])
         
-        if retg1 == 'False':
             return Z
-        elif retg1 == 'True':
-            return Z,g1dic
+       
+    def g1_tau(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False',evol_time = None, opts = None): 
+        '''
         
+
+        Parameters
+        ----------
+        Nt : TYPE
+            DESCRIPTION.
+        tau : TYPE
+            DESCRIPTION.
+        rho0 : TYPE
+            DESCRIPTION.
+        time_sensitivity : TYPE, optional
+            DESCRIPTION. The default is 0.
+        detpols : TYPE, optional
+            DESCRIPTION. The default is np.array([None,None,None]).
+        retg1 : TYPE, optional
+            DESCRIPTION. The default is 'False'.
+        opts : TYPE, optional
+            DESCRIPTION. The default is None.
+        
+
+        Returns
+        -------
+        None.
+
+        Parameters
+        ----------
+        Nt : int
+            Number of evenly space points in one time period of the Hamiltonian. Should probably be a power of 2.
+        tau : doesn't have to be int, but should probably be a whole number.
+            Number of periods of evolution being sumlated.
+        rho0 : vector numpy.ndarray
+            initial state rho0 in the computational basis.
+        time_sense : float 0-1, optional
+            the time sensitivity/secular approximation restriction for this rate
+                matrix as a multiple of the system frequency beatfreq. As far as 
+                Ned and I have guessed (cause we aren't positive),0 is completely 
+                time independant and in line with, e.g. Blumel's R tensor 
+                description (sure of this) and 1 is completely time dependant 
+                (unsure of this) as it's taking terms on the order
+                of 1*omega. The default is 0.
+        detpols : list
+            List of desired detection polarizations. If none are specified,
+            "unpolarized" detection is formed by summing the results of the two
+            linear components of emission. 
+            The default is np.array([None,None,None]).
+        evol_time : TYPE, optional
+             DESCRIPTION. The default is None.
+        opts : Options object, optional
+            Optional arguments for solve_ivp solvers. The default is None.
+       
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        '''
+        ############### Time evolving rho0 with solve_ivp#########################
+        
+             
+        
+        
+        
+        if opts == None:
+            opts = Options()                                  #Setting up the options used in the mode and state solvers
+            opts.atol = 1e-6                                  #Absolute tolerance
+            opts.rtol = 1e-8                                  #Relative tolerance
+            opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
+        
+        
+        
+        Nt = Nt                                        #Number of Points
+        timet = self.T                                      #Length of time of tlist defined to be one period of the system
+        dt = timet/Nt                                      #Time point spacing in tlist
+        tlist = np.linspace(0, timet-dt, Nt)               #Combining everything to make tlist
+        
+        #Taulist Definition
+        Ntau = (Nt)*(tau)                                    
+        taume = tau*self.T                          
+        dtau = dt                                 
+        taulist = np.linspace(0, taume-dtau, Ntau)       
+        
+        '''
+        Defining the total time of evolution for use in calculating the floquet states
+        '''
+        #Taulist Definition
+        NtauF = (Nt)*2*(tau)                                    
+        taumeF = 2*tau*self.T                          
+        dtauF = dt                                 
+        taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
+
+        
+        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
+        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
+        
+
+               
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
+
+        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
+
+        
+        
+        '''
+        Looping over detection polarizations, to hopefully make things faster
+        '''
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
+           
+        
+        
+        
+        Z = {}
+        g1dic = {}
+        for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
+
+            sys_f_low = f_states_all_periods_conjt @ (detpol_low_op).full() @ f_states_all_periods
+            sys_f_raise = np.transpose(sys_f_low,axes=(0,2,1)).conj()
             
-    def g2_tau(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), opts = None):
+            
+            rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
+            
+            
+            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
+            g1 = self.expect_2op_2t(sys_f_low, sys_f_raise, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
+            
+        
+            return g1    
+    def g2_tau(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), evol_time = None, opts = None):
         '''
         Parameters
         ----------
@@ -1075,7 +1196,7 @@ class QSys:
         taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
 
         
-        ss_time = fmm.steadystate_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T)
+        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
         f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
         
         print('found f0, qe, f_states_all_periods')
@@ -1108,7 +1229,7 @@ class QSys:
             pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
 
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
-            rho_steadystate = self.steadystate_rho(rho0_floquet,ss_time,Nt,args = (Rdic,self.beat/2),T = self.T)
+            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
             
 
             g2_denom_expect = self.expect_1op_1t(pop_op, rho_steadystate, tlist,  Rdic, self.beat/2,taulist=taulist)

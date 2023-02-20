@@ -280,16 +280,21 @@ def prepWork(H,T,args,tlist,taulist, ss_time = None, opts = None):
     return f0,qe,f_modes_list_one_period,fstates,fstatesct
 
 
-def steadystate_time(c_op_mag,T):  
+def evol_time(c_op_mag,T,evol_time =None):  
     '''
     
 
+    Parameters
+    ----------
     Parameters
     ----------
     c_op_mag : float
         smallest magnitude of all collapse operators of the system
     T : float
         Period of the Hamiltonian.
+    evol_time : INT, optional
+        the WHOLE NUMBER OF PERIODS forward to evolve the system. 
+        The default is to find the steadystate time.
 
     Returns
     -------
@@ -297,10 +302,14 @@ def steadystate_time(c_op_mag,T):
         WHOLE NUMBER of periods foward at which the steady state occurs.
 
     '''
-    
-    time_scale = (2*np.pi)/c_op_mag
-    
-    periods_required = int(np.ceil(time_scale/T))
+
+    #If no time is input, assume steadystate dynamics.
+    if evol_time == None:
+        time_scale = (2*np.pi)/c_op_mag        
+        periods_required = int(np.ceil(time_scale/T))
+    #Else, pass the evol_time as a number of periods of evolution
+    else:
+        periods_required = int(np.ceil(evol_time*T))
     
     return periods_required
 

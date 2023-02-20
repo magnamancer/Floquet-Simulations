@@ -122,7 +122,7 @@ LP = {
 
 
 tau = 50 #Length of time to go forward, in units of T, the system Frequency
-Nt = 2**4 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
+Nt = 2**3 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
 PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
 interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
 
@@ -131,7 +131,7 @@ point_spacing = 0.0001
 detuning0 = -.005
 
 
-power_range = 51
+power_range = 101
 P_array = np.zeros(power_range)
 for i in range(power_range):
     P_array[i]=(((i*1)))
