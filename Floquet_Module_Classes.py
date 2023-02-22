@@ -996,7 +996,7 @@ class QSys:
         
             print('Finished Detpol',detpols[Ldx])
         
-            return Z
+        return Z
        
     def g1_tau(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False',evol_time = None, opts = None): 
         '''

@@ -190,7 +190,7 @@ for idz, val in enumerate(P_array):
         transY2=(abs(Transitions[3]-Transitions[0]))
     
     
-    spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
+    spec1 = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
     
     # spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
     
@@ -216,11 +216,7 @@ for idz, val in enumerate(P_array):
     ZP.append(spec1['SP'])
     ZM.append(spec1['SM'])
 
-    Z0g1.append(g1dic['X']+g1dic['Y'])
-    ZXg1.append(g1dic['X'])
-    ZYg1.append(g1dic['Y'])
-    ZPg1.append(g1dic['SP'])
-    ZMg1.append(g1dic['SM'])
+  
     
     Z0Lavg.append(np.average(Z0L[-1]))
     Z0Cavg.append(np.average(Z0C[-1]))
