@@ -78,12 +78,10 @@ collapse_operator_list = [c_op_lc,
                           c_op_sm]
 
 
-'''
-Defining Detection polarization
-'''
+
 
 '''
-A bunch of empty arrays, for use testing stuff
+A bunch of empty arrays, for use building output arrays
 '''
 Z0L = [] #Empty list to hold the spectra
 Z0C = []
@@ -123,8 +121,7 @@ LP = {
 
 tau = 50 #Length of time to go forward, in units of T, the system Frequency
 Nt = 2**3 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
-PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
-interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
+
 
 
 point_spacing = 0.0001
@@ -191,26 +188,10 @@ for idz, val in enumerate(P_array):
         transY1=(abs(Transitions[2]-Transitions[1]))
         transY2=(abs(Transitions[3]-Transitions[0]))
     
-
+    '''
+    To Calculate emission spectra
+    '''
     # spec1,g1dic = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'],retg1='True')
-
-    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
-    
-    
-
-
-    # #For ExciteSpec
-    Z0Lavg.append(spec1['X']+spec1['Y'])
-    Z0Cavg.append(spec1['SP']+spec1['SM'])
-    ZXavg.append(spec1['X'])
-    ZYavg.append(spec1['Y'])
-    ZPavg.append(spec1['SP'])
-    ZMavg.append(spec1['SM'])
-
-    
-
-
-
 
     # Z0L.append(spec1['X']+spec1['Y'])
     # Z0C.append(spec1['SP']+spec1['SM'])
@@ -232,10 +213,30 @@ for idz, val in enumerate(P_array):
     # ZPavg.append(np.average(ZP[-1]))
     # ZMavg.append(np.average(ZM[-1]))
     
+    
+    '''
+    To calcaulate Excitation Spectra
+    '''
+    spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
+
+    Z0Lavg.append(spec1['X']+spec1['Y'])
+    Z0Cavg.append(spec1['SP']+spec1['SM'])
+    ZXavg.append(spec1['X'])
+    ZYavg.append(spec1['Y'])
+    ZPavg.append(spec1['SP'])
+    ZMavg.append(spec1['SM'])
+
+    
 
 
+
+
+   
+  
 total_time = time.time()-start_time
-# # # For plotting individual spectra
+'''
+Section below is For plotting individual emission spectra
+'''
 # idx = 0                                            #Plotting the results!
 
 
@@ -280,8 +281,12 @@ total_time = time.time()-start_time
 # ax[1,1].set_ylabel("g1") 
 
 
-# fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
+# fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}" )
 
+
+'''
+This section is for plotting emission spectra
+'''
 
 # freqlims = [omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]#[-0.05,0.05]
 
@@ -352,8 +357,11 @@ total_time = time.time()-start_time
 # fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
 
 
-
-# # For plotting Excitation Arrays
+'''
+For plotting Excitation Arrays. These are calculated either with
+"ExciteSpec" or can be calculated as the normalized sum of 
+"EmissSpec"
+'''
 fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
 
 #First plot to see how the linear polarizations works out
