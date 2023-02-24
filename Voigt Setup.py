@@ -28,7 +28,7 @@ dot = FC.QD(4,states,dipole,gfactors)
 
 
 '''
-Defining the Lowering Operator
+Defining the Collapse Operators
 '''
 manifolds_collapse_rate = np.sqrt(2*np.pi*.0000025)
 
@@ -78,12 +78,10 @@ collapse_operator_list = [c_op_lc,
                           c_op_sm]
 
 
-'''
-Defining Detection polarization
-'''
+
 
 '''
-A bunch of empty arrays, for use testing stuff
+A bunch of empty arrays, for use in holding results
 '''
 Z0L = [] #Empty list to hold the spectra
 Z0C = []
@@ -123,8 +121,7 @@ LP = {
 
 tau = 50 #Length of time to go forward, in units of T, the system Frequency
 Nt = 2**3 #Number of points to solve for in each period of the system. Minimum depends on the lowering operator
-PDM = 2**0 #If the spectrumm isn't as wide as it needs to be, increase the power of 2 here.
-interpols = 2**0 #interpolation, for if the spectra are doing the *thing*
+
 
 
 point_spacing = 0.0001
@@ -192,14 +189,13 @@ for idz, val in enumerate(P_array):
         transY2=(abs(Transitions[3]-Transitions[0]))
     
 
-    spec1 = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'],retg1='True')
+    '''
+    Uncomment to calculate excitation spectra
+    '''
 
     # spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
-    
-    
 
-
-    # # #For ExciteSpec
+    
     # Z0Lavg.append(spec1['X']+spec1['Y'])
     # Z0Cavg.append(spec1['SP']+spec1['SM'])
     # ZXavg.append(spec1['X'])
@@ -210,8 +206,11 @@ for idz, val in enumerate(P_array):
     
 
 
-
-
+    '''
+    Uncomment to calculate emission spectra
+    '''
+    spec1 = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'],retg1='True')
+    
     Z0L.append(spec1['X']+spec1['Y'])
     Z0C.append(spec1['SP']+spec1['SM'])
     ZX.append(spec1['X'])
@@ -231,7 +230,11 @@ for idz, val in enumerate(P_array):
 
 
 total_time = time.time()-start_time
-# # # For plotting individual spectra
+
+'''
+For plotting individual emission spectra
+'''
+
 # idx = 0                                            #Plotting the results!
 
 
@@ -276,9 +279,11 @@ total_time = time.time()-start_time
 # ax[1,1].set_ylabel("g1") 
 
 
-# fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
+# fig.suptitle(F"Voigt Config with $\Omega_1$ = 1 GHz {L2pol}, $\Delta_1$ = {detuning0+point_spacing*idx} GHz, B = {Bpower}" )
 
-
+'''
+Uncomment to create colormaps of emission spectra
+'''
 freqlims = [omega_array[0]-(Exp.beat/(4*np.pi)),omega_array[-1]-(Exp.beat/(4*np.pi))]#[-0.05,0.05]
 
 
@@ -298,7 +303,6 @@ ZM_truncated = np.stack([ZMi[idx0:idxf] for ZMi in ZM])
 
 clims = [1e-6,1e-1]
 
-# Plot on a colorplot
 fig, ax = plt.subplots(2,2)
 limits = [plot_freq_range[0],\
           plot_freq_range[-1],\
@@ -339,73 +343,53 @@ limits = [plot_freq_range[0],\
           detuning0+P_array[-1]*point_spacing]
 pos = ax.imshow(Z0L_truncated,cmap=plt.get_cmap(cm.bwr), aspect='auto', interpolation='nearest', origin='lower',
             extent = limits,  norm=matplotlib.colors.LogNorm(), clim = clims) 
-# ax.axvline(x=(0*Om1/(2*np.pi)), color='y', linestyle = 'solid',linewidth =3)
-# ax.axvline(x=(1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
-# ax.axvline(x=(-1*Om1/(2*np.pi)), color='y', linestyle = 'dashed',linewidth =3)
 ax.set_xlabel('$\omega$ (THz)')
 ax.set_ylabel('$\Delta_1$ [THz]') 
 ax.set_title(F'Voigt Config with $\Omega_1$ = 1 GHz, excitation laser = {L2pol}, detpol = None, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}' )
 fig.colorbar(pos, ax=ax)# # For plotting Excitation Arrays
 
 
+'''
+Uncomment to create colormaps of Excitation spectra (Normalized sum of emission spectra - so Emisspec calculates this (slower) anyways)
+'''
 
-# # # For plotting Excitation Arrays
-# fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
+fig, ax = plt.subplots(2,2)                                                    #Plotting the results!
 
-# #First plot to see how the linear polarizations works out
-# ax[0,0].plot(detuning0+P_array*point_spacing,Z0Lavg, color = 'k' ) #Plokktting the dirint result for comparison
-# ax[0,0].plot(detuning0+P_array*point_spacing,ZXavg, color = 'slateblue', linestyle = 'dashed')
-# ax[0,0].plot(detuning0+P_array*point_spacing,ZYavg, color = 'lightsteelblue' )
-# ax[0,0].legend(['NoPol','x','y'])
-# ax[0,0].set_ylabel("Average value of Spectrum") 
-# ax[0,0].axvline(x=transX1-280,color = 'r')
-# ax[0,0].axvline(x=transX2-280,color = 'r')
-# ax[0,0].axvline(x=transY1-280,color = 'g')
-# ax[0,0].axvline(x=transY2-280,color = 'g')
+#First plot to see how the linear polarizations works out
+ax[0,0].plot(detuning0+P_array*point_spacing,Z0Lavg, color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,0].plot(detuning0+P_array*point_spacing,ZXavg, color = 'slateblue', linestyle = 'dashed')
+ax[0,0].plot(detuning0+P_array*point_spacing,ZYavg, color = 'lightsteelblue' )
+ax[0,0].legend(['NoPol','x','y'])
+ax[0,0].set_ylabel("Average value of Spectrum") 
+ax[0,0].axvline(x=transX1-280,color = 'r')
+ax[0,0].axvline(x=transX2-280,color = 'r')
+ax[0,0].axvline(x=transY1-280,color = 'g')
+ax[0,0].axvline(x=transY2-280,color = 'g')
 
-# # #First plot to see how the linear polarizations works out
-# # ax[0,0].plot(Z0Lavg, color = 'k' ) #Plokktting the dirint result for comparison
-# # ax[0,0].plot(ZXavg, color = 'slateblue', linestyle = 'dashed')
-# # ax[0,0].plot(ZYavg, color = 'lightsteelblue' )
-# # ax[0,0].legend(['NoPol','x','y'])
-# # ax[0,0].set_ylabel("Average value of Spectrum") 
+#Second plot to look at circular polarizations
+ax[0,1].plot(  detuning0+P_array*point_spacing, Z0Cavg, color = 'k' ) #Plokktting the dirint result for comparison
+ax[0,1].plot(detuning0+P_array*point_spacing, ZPavg, color = 'navajowhite')
+ax[0,1].plot(detuning0+P_array*point_spacing, ZMavg, color = 'orangered' , linestyle = 'dashed')
+ax[0,1].legend(['NoPol','SP','SM'])
 
+#Third for linear percent deviation
+ax[1,0].plot(  detuning0+P_array*point_spacing, np.array(Z0Lavg)/np.array(Z0Lavg), color = 'k' ) #Plokktting the dirint result for comparison
+ax[1,0].plot(detuning0+P_array*point_spacing, np.array(ZXavg)/np.array(Z0Lavg), color = 'slateblue', linestyle = 'dashed')
+ax[1,0].plot(detuning0+P_array*point_spacing, np.array(ZYavg)/np.array(Z0Lavg), color = 'lightsteelblue' )
+ax[1,0].legend(['NoPol','x','y'])
+ax[1,0].set_xlabel('$\Delta_1$ [THz]')
+ax[1,0].set_ylabel("Polarizations/NoPol") 
 
-# #Second plot to look at circular polarizations
-# ax[0,1].plot(  detuning0+P_array*point_spacing, Z0Cavg, color = 'k' ) #Plokktting the dirint result for comparison
-# ax[0,1].plot(detuning0+P_array*point_spacing, ZPavg, color = 'navajowhite')
-# ax[0,1].plot(detuning0+P_array*point_spacing, ZMavg, color = 'orangered' , linestyle = 'dashed')
-# ax[0,1].legend(['NoPol','SP','SM'])
-
-# #Third for linear percent deviation
-# ax[1,0].plot(  detuning0+P_array*point_spacing, np.array(Z0Lavg)/np.array(Z0Lavg), color = 'k' ) #Plokktting the dirint result for comparison
-# ax[1,0].plot(detuning0+P_array*point_spacing, np.array(ZXavg)/np.array(Z0Lavg), color = 'slateblue', linestyle = 'dashed')
-# ax[1,0].plot(detuning0+P_array*point_spacing, np.array(ZYavg)/np.array(Z0Lavg), color = 'lightsteelblue' )
-# ax[1,0].legend(['NoPol','x','y'])
-# ax[1,0].set_xlabel('$\Delta_1$ [THz]')
-# ax[1,0].set_ylabel("Polarizations/NoPol") 
-
-# #Fourth for circular percent deviation
-# ax[1,1].plot(  detuning0+P_array*point_spacing, np.array(Z0Cavg)/np.array(Z0Cavg), color = 'k' ) #Plokktting the dirint result for comparison
-# ax[1,1].plot(detuning0+P_array*point_spacing, np.array(ZPavg)/np.array(Z0Cavg), color = 'navajowhite')
-# ax[1,1].plot(detuning0+P_array*point_spacing,np.array(ZMavg)/np.array(Z0Cavg), color = 'orangered' , linestyle = 'dashed')
-# ax[1,1].legend(['NoPol','P','M'])
-# ax[1,1].set_xlabel('$\Delta_1$ [THz]')
-
-# # # #Third for linear percent deviation
-# # # ax[1,0].plot(detuning0+P_array*point_spacing, ((np.array(Z0avg)-(np.array(ZXavg)+np.array(ZYavg)))/np.array(Z0avg))*100, color = 'k' ) #Plokktting the dirint result for comparison
-# # # ax[1,0].legend(['NoPol-(XPol+YPol)'])
-# # # ax[1,0].set_xlabel('$\Delta_1$ [THz]')
-# # # ax[1,0].set_ylabel("Percent Deviation") 
-
-# # # #Fourth for circular percent deviation
-# # # ax[1,1].plot(detuning0+P_array*point_spacing, ((np.array(Z0avg)-(np.array(ZXavg)+np.array(ZYavg)))/np.array(Z0avg))*100, color = 'k' ) #Plokktting the dirint result for comparison
-# # # ax[1,1].legend(['NoPol-(SPPol+SMPol)'])
-# # # ax[1,1].set_xlabel('$\Delta_1$ [THz]')
-# # # ax[1,1].set_ylabel("Percent Deviation") 
+#Fourth for circular percent deviation
+ax[1,1].plot(  detuning0+P_array*point_spacing, np.array(Z0Cavg)/np.array(Z0Cavg), color = 'k' ) #Plokktting the dirint result for comparison
+ax[1,1].plot(detuning0+P_array*point_spacing, np.array(ZPavg)/np.array(Z0Cavg), color = 'navajowhite')
+ax[1,1].plot(detuning0+P_array*point_spacing,np.array(ZMavg)/np.array(Z0Cavg), color = 'orangered' , linestyle = 'dashed')
+ax[1,1].legend(['NoPol','P','M'])
+ax[1,1].set_xlabel('$\Delta_1$ [THz]')
 
 
-# fig.suptitle(F"Voigt Config Excitation Spectrum with $\Omega_1$ = 1 GHz {L2pol}, B = {Bpower}, $\\tau$ = {tau}, Nt = {Nt}" )
+
+fig.suptitle(F"Voigt Config Excitation Spectrum with $\Omega_1$ = 1 GHz {L2pol}, B = {Bpower}" )
 
 
 
