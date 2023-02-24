@@ -374,13 +374,13 @@ class QSys:
                     detuning to the second manifold.
                     
                     Empirically, it lookds like that doesn't do anything negative at all to the resulting spectra, though that nondegenaracy then
-                    fucks up the degeneracy condition I use to build the Zeeman Hamiltonian. By rounding the input, I'm rounding out that small
+                    messes up the degeneracy condition I use to build the Zeeman Hamiltonian. By rounding the input, I'm rounding out that small
                     nondegeneracy. WHICH MEANS YOU NEED TO MAKE A BETTER FIX LATER, FENTON.
                     
                     I'm no longer rounding, but now checking absolute percent deviation. If the first entry is zero, check to see if the second entry is zero.
                     If they are, congrats, stick a magnetic field in that bitch. If the first entry is not zero, check to see that its absolute percent deviation
                     from the second entry is less than 1%. If it is, magnetic field. Otherwise ignore it. THIS IS STILL NOT A FULL FIX FENTON. YOU NEED TO FIX 
-                    FMODES SO IT DOESN'T FUCK UP WITH DEGENERATE MANIFOLDS. THIS IS JUST A BETTER BANDAID
+                    FMODES SO IT DOESN'T MESS UP WITH DEGENERATE MANIFOLDS. THIS IS JUST A BETTER BANDAID
                     '''
                     if abs(self.QD.states[i]-self.QD.states[j]) <= 1e-6 or abs(self.QD.states[i]) != 0 and 100*(abs(self.QD.states[i]-self.QD.states[j])/abs(self.QD.states[i])) <= 1 :
                         self.ZHammy[i,i] = -1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
