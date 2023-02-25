@@ -22,20 +22,22 @@ Plan: I'm going to construct a 2LS, then produce a colormap of the
 emission spectra as near-resonant laser detuning is swept through resonance
 
 I'll try to explain this script to death so that it can be used or at least
-modified later to an "intro" script '
+modified later if desired '
 """
-
-from qutip import *
 import time
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors
+
+from qutip import *
+
 
 import Floquet_sims_lowest_module as flm
 import Floquet_sims_mid_module as fmm
 import Floquet_Module_Classes as FC
 
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import matplotlib.colors
+
 
 '''
 Defining the Dot

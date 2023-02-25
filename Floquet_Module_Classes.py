@@ -4,22 +4,18 @@ Created on Wed Aug 17 12:33:00 2022
 
 @author: FentonClawson
 """
+import numpy as np
+import scipy as scp
+import itertools
+import math
+from IPython import get_ipython
+get_ipython().run_line_magic('matplotlib', 'qt')
 
 from qutip import *
 
 import Floquet_sims_lowest_module as flm
 import Floquet_sims_mid_module as fmm
 import Floquet_Module_Classes as FC
-
-import numpy as np
-import scipy as scp
-import itertools
-import math
-
-from IPython import get_ipython
-get_ipython().run_line_magic('matplotlib', 'qt')
-
-#Defining evberything to reproduce my exact results first, will generalize later when I figure it out!
 
 class Laser:
     def __init__(self,magnitude,pol,freq):
@@ -34,12 +30,12 @@ class Laser:
             frequency of the laser.
 
         '''
-        
         self.magnitude = magnitude
         self.pol = pol
         self.freq = freq
         
         self.E = self.magnitude*self.pol
+
 
 class Bfield:
     def __init__(self,Bvec):
@@ -55,7 +51,8 @@ class Bfield:
 
         '''
         self.Bvec = Bvec 
-        
+
+
 class Collapse_Op:
     def __init__(self,mat,mag):
         '''
@@ -75,6 +72,7 @@ class Collapse_Op:
         '''
         self.mat = mat #The matrix form of the lowering operator
         self.mag = mag
+
 
 class QD:
     def __init__(self,Hdim,states,dipoles,gfactors = None):
@@ -98,11 +96,11 @@ class QD:
                    optional. The default is None.
 
         '''
-        self.Hdim = Hdim #Dimension of the system
-        self.states = states #
-        self.dipoles = dipoles #
-        self.gfactors = gfactors         
-        self.fss = None #Optional propery "fss," the fine structure splitting of states. Given as a dictionary with the bare energies as keys and the fss amount as values.  
+        self.Hdim = Hdim
+        self.states = states 
+        self.dipoles = dipoles 
+        self.gfactors = gfactors   
+        
     def lowering_operator(self):
         '''
         Creates the lowering operator of the QD based on the 
@@ -114,15 +112,12 @@ class QD:
             Lowering operator of the system
 
         '''
-
-        
         return Qobj(sum([np.eye(1, self.Hdim * self.Hdim, k=(i) * self.Hdim + j).reshape(self.Hdim, self.Hdim) for i,j in self.dipoles]))
+
 
 class QSys:
     def __init__(self,QD,LasList, Bfield = None, c_op_list = None):
         '''
-        
-
         Parameters
         ----------
         QD : QD Object
@@ -149,26 +144,20 @@ class QSys:
         self.QD = QD
         self.c_op_list = c_op_list
 
-
         if len(self.LasList) == 1:
             freqspoof = self.LasList[0].freq*0.99997
             self.Lavg = (1/2)*(freqspoof+self.LasList[0].freq)
-            self.beat  = abs(freqspoof-self.LasList[0].freq )
+            self.beat  = abs(freqspoof-self.LasList[0].freq ) #beat frequency
             
         elif len(self.LasList) == 2:
             self.Lavg = (1/2)*(self.LasList[0].freq+self.LasList[1].freq)
             self.beat  = abs(self.LasList[1].freq-self.LasList[0].freq )
             
-        
-        
-        
-         
-                                    
         self.T     = (2*np.pi/(self.beat/2))
-        self.Delta = self.QD.states[-1]-self.Lavg                             #Average Detuning of the lasers from the excited state
+        self.Delta = self.QD.states[-1]-self.Lavg 
+        self.Hargs = {'w': (self.beat/2)}     
 
-        self.Hargs = {'w': (self.beat/2)}                                             #Characteristic frequency of the Hamiltonian is half the beating frequency of the Hamiltonian after the RWA. QuTiP needs it in Dictionary form.
-
+                                        
 ############################################################################### 
 ###############################################################################                    
 ######################### Hamiltonian Construction ############################
@@ -185,26 +174,6 @@ class QSys:
             DESCRIPTION.
 
         '''
-        if self.Bfield == None:
-            w,v = np.linalg.eig(np.identity(self.QD.Hdim))
-        if self.Bfield != None:
-            self.AZHam = self.AtomHam()+self.ZHam()
-            w,v = np.linalg.eig(self.AZHam)
-            self.w = w
-        '''
-        The function below this is used to reorder the matrix into the expected
-            block-diagonal form. It will leave the matrix unchanged if it's
-            already in this form
-        '''
-        
-            
-        
-        v,CorrPerms = flm.reorder(v)
-        self.v = Qobj(v)
-        
-     
-        
-      
         '''
         Defining the time dependance as functions for use in the Hamiltonian
         '''
@@ -217,15 +186,9 @@ class QSys:
         H = [(self.AtomHam()+self.ZHam()),                                                    
             [self.LasHam()[0],H1_coeff],                    
             [self.LasHam()[1],H2_coeff]]   
-            
-        
-        
-        
-        
+
         return H
-  
-   
-   
+
     def LasHam(self):
         '''
         Laser portion of the Hamiltonian. Semi-analytically calculated
@@ -252,11 +215,13 @@ class QSys:
         for lasdx, Laser in enumerate(self.LasList):
             for edx, dipole in enumerate(self.QD.dipoles): 
                 rabi_freq[edx,lasdx] = np.dot(self.QD.dipoles[dipole],Laser.E)
-                rabi_freq_tilde[edx,lasdx] = np.dot(self.QD.dipoles[dipole],np.conj(Laser.E))
+                rabi_freq_tilde[edx,lasdx] = np.dot(self.QD.dipoles[dipole],
+                                                    np.conj(Laser.E))
         
         '''
-        Next I want to define the time-dependance of each Rabi frequency. Keep in mind that tilde terms have 
-            negative time dependance comapared to their un-tilde'd counterparts, Fenton
+        Next I want to define the time-dependance of each Rabi frequency.
+            Keep in mind that tilde terms have negative time dependance 
+            comapared to their un-tilde'd counterparts.
         '''
         laser_beat = {}  
         laser_beat_tilde = {}          
@@ -273,16 +238,15 @@ class QSys:
         for lasdx, key in enumerate(laser_beat):
             for edx, moment in enumerate(self.QD.dipoles.keys()):
                 dipole_moment = moment
-                dip_mat = basis(self.QD.Hdim,dipole_moment[0])*basis(self.QD.Hdim,dipole_moment[1]).dag()
+                dip_mat = (basis(self.QD.Hdim,dipole_moment[0])
+                          *basis(self.QD.Hdim,dipole_moment[1]).dag())
                 
-                if math.isclose(laser_beat[key] , self.beat/2,abs_tol = 1e-4):
+                if math.isclose(laser_beat[key], self.beat/2, abs_tol = 1e-4):
                    
                     forward.append(((-1/2)*rabi_freq[edx,lasdx]*dip_mat).full())
                  
-                if math.isclose(laser_beat_tilde[key] , self.beat/2,abs_tol = 1e-4):
+                if math.isclose(laser_beat_tilde[key], self.beat/2, abs_tol = 1e-4):
                     forward.append((-1/2)*rabi_freq_tilde[edx,lasdx]*dip_mat)
-        
-        
         '''
         Finding backward rotating terms by subtracting the -beat frequency.
             Anything that ends up at zero is a backward rotating term
@@ -291,7 +255,8 @@ class QSys:
         for lasdx, key in enumerate(laser_beat):
             for edx, moment in enumerate(self.QD.dipoles.keys()):
                 dipole_moment = moment
-                dip_mat = basis(self.QD.Hdim,dipole_moment[0])*basis(self.QD.Hdim,dipole_moment[1]).dag()
+                dip_mat = (basis(self.QD.Hdim,dipole_moment[0])
+                           *basis(self.QD.Hdim,dipole_moment[1]).dag())
                 
                 if math.isclose(laser_beat[key] , -self.beat/2,abs_tol = 1e-4):
                    
@@ -307,10 +272,8 @@ class QSys:
         forward_appended  = forward.copy()  
         for back_mat in backward:
             forward_appended.append(back_mat.T.conj())
-        
         for for_mat in forward:
             backward_appended.append(for_mat.T.conj())
-        
         
         self.forwardrot  = sum(forward_appended )
         self.backwardrot = sum(backward_appended)
@@ -321,11 +284,7 @@ class QSys:
         if not self.backwardrot.any():
             self.backwardrot = np.zeros((self.QD.Hdim,self.QD.Hdim))
             
-       
-        
         return Qobj(np.round(self.forwardrot,10)), Qobj(np.round(self.backwardrot,10))
-
-    
 
     def AtomHam(self):
         '''
@@ -349,8 +308,6 @@ class QSys:
             self.AtomHammy[n,n] = self.QD.states[n]-eta[n]
         
         return Qobj(np.round(self.AtomHammy,10))
-    
-    
 
     def ZHam(self):
         '''
@@ -370,7 +327,7 @@ class QSys:
                     '''
                     Right now, I'm adding the rounding in the line directly below as a patch
                     
-                    Because f0 function can't take degenerate manifolds (without a magnetic field!), I add something like ~1/1000 of a GHz 
+                    Because it looks like f0 function can't take degenerate manifolds (without a magnetic field!), I add something like ~1/1000 of a GHz 
                     detuning to the second manifold.
                     
                     Empirically, it lookds like that doesn't do anything negative at all to the resulting spectra, though that nondegenaracy then
@@ -378,34 +335,28 @@ class QSys:
                     nondegeneracy. WHICH MEANS YOU NEED TO MAKE A BETTER FIX LATER, FENTON.
                     
                     I'm no longer rounding, but now checking absolute percent deviation. If the first entry is zero, check to see if the second entry is zero.
-                    If they are, congrats, stick a magnetic field in that bitch. If the first entry is not zero, check to see that its absolute percent deviation
-                    from the second entry is less than 1%. If it is, magnetic field. Otherwise ignore it. THIS IS STILL NOT A FULL FIX FENTON. YOU NEED TO FIX 
-                    FMODES SO IT DOESN'T MESS UP WITH DEGENERATE MANIFOLDS. THIS IS JUST A BETTER BANDAID
+                    If they are, congrats. If the first entry is not zero, check to see that its absolute percent deviation
+                    from the second entry is less than 1%. If it is, magnetic field. Otherwise ignore it.
                     '''
-                    if abs(self.QD.states[i]-self.QD.states[j]) <= 1e-6 or abs(self.QD.states[i]) != 0 and 100*(abs(self.QD.states[i]-self.QD.states[j])/abs(self.QD.states[i])) <= 1 :
+                    if (abs(self.QD.states[i]-self.QD.states[j]) <= 1e-6 or abs(self.QD.states[i]) != 0 
+                        and 100*(abs(self.QD.states[i]-self.QD.states[j])/abs(self.QD.states[i])) <= 1 ):
                         self.ZHammy[i,i] = -1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
                         self.ZHammy[j,j] =  1*self.Bfield.Bvec[1]*self.QD.gfactors[Count][1]
-                        self.ZHammy[i,j] = self.ZHammy[j,i] = (1/2)*self.Bfield.Bvec[0]*self.QD.gfactors[Count][0]
+                        self.ZHammy[i,j] = self.ZHammy[j,i] = (1/2)*(self.Bfield.Bvec[0]
+                                                                     *self.QD.gfactors[Count][0])
                        
                         Count += 1
         return Qobj(np.round(self.ZHammy,10))
-        
-        
-        
-        
-        
-        
-        
-    
+
+
 ############################################################################### 
 ###############################################################################                    
 ######################## Operator Expectation Values ##########################
 ###############################################################################  
-###############################################################################     
+###############################################################################  
+   
     def rho_time_evol(self,rho0,Nt,args,T,evol_time,opts = None):
         '''
-        
-
         Parameters
         ----------
         rho0 : vector numpy.ndarray
@@ -432,9 +383,9 @@ class QSys:
 
         '''
         if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-6                                  #Absolute tolerance
-            opts.rtol = 1e-8                                  #Relative tolerance
+            opts = Options()                                  
+            opts.atol = 1e-6                                  
+            opts.rtol = 1e-8                                  
             opts.nsteps= 10e+6  
             
         #Taulist Definition
@@ -444,14 +395,13 @@ class QSys:
         taulist = np.linspace(0, taume-dtau, Ntau)       
         steadystate_time = taulist[-1]+taulist[1]
         
-        
-        rho_steadystate= scp.integrate.solve_ivp(flm.rhodot                   ,
+        rho_steadystate= scp.integrate.solve_ivp(flm.rhodot,
                                                 t_span = (0,steadystate_time),
-                                                y0=rho0              ,
-                                                args=args        ,
-                                                method='DOP853'              ,
-                                                t_eval=np.append(taulist,steadystate_time) ,
-                                                rtol=opts.rtol               ,
+                                                y0=rho0,
+                                                args=args,
+                                                method='DOP853',
+                                                t_eval=np.append(taulist,steadystate_time),
+                                                rtol=opts.rtol,
                                                 atol=opts.atol).y[:,-1]     
         return rho_steadystate
     
@@ -484,12 +434,12 @@ class QSys:
     
         
         '''
-        
+
         if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-6                                  #Absolute tolerance
-            opts.rtol = 1e-8                                  #Relative tolerance
-            opts.nsteps= 10e+6                                #Maximum number of Steps                              #Maximum number of Steps
+            opts = Options()                                  
+            opts.atol = 1e-6                                  
+            opts.rtol = 1e-8                                  
+            opts.nsteps= 10e+6                                
         
             
         
@@ -504,27 +454,25 @@ class QSys:
         the time axis and take the trace to get the population value in the steady state.
         '''
         
-        op_rho_ss_unavg = [ (oper[i])                       \
+        op_rho_ss_unavg = [ (oper[i])                       
                       @ np.reshape(
-                            scp.integrate.solve_ivp(flm.rhodot                       ,
-                                                    t_span = (0,tlist[-1])   ,
-                                                    y0=rho0                 ,
-                                                    args=(Rdic,omega)           ,
-                                                    method='DOP853'                  ,
-                                                    t_eval=(tlist)            ,
-                                                    rtol=opts.rtol                   ,
-                                                    atol=opts.atol).y[:,i]           ,
+                            scp.integrate.solve_ivp(flm.rhodot,
+                                                    t_span = (0,tlist[-1]),
+                                                    y0=rho0,
+                                                    args=(Rdic,omega),
+                                                    method='DOP853',
+                                                    t_eval=(tlist),
+                                                    rtol=opts.rtol,
+                                                    atol=opts.atol).y[:,i],
                                     (op_dims,op_dims),order='F')  
                         for i in list(range(0,len(tlist)))]
         
         if taulist is not None:
-            op_rho_ss_unavg_many_t  = np.zeros( (len( op_rho_ss_unavg)         , len(taulist), op_dims,op_dims), dtype='complex_' ) 
+            op_rho_ss_unavg_many_t  = np.zeros((len( op_rho_ss_unavg), len(taulist), op_dims,op_dims),
+                                               dtype='complex_' ) 
             for tdx in range(len(tlist)): #First for loop to find the tau outputs for each t value
-                #New "starting time"
                 initial_tau = tlist[tdx]
-                
-               
-               
+
                 rho_ss_tau_evolve = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
                                                     flm.rhodot,
                                                     t_span = (initial_tau,initial_tau+taulist[-1]), 
@@ -537,20 +485,13 @@ class QSys:
                                         op_dims,axis=0)),(0,1,2),(1,0,2))
                         
                 op_rho_ss_unavg_many_t[tdx,...] = rho_ss_tau_evolve    
-            
                 op_rho_ss_avg = np.mean(op_rho_ss_unavg_many_t,axis=0)
+                
             one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=1,axis2=2)
-        
-            
-        
-        
         
         else:
             op_rho_ss_avg = np.average(op_rho_ss_unavg,axis=0)
             one_op_one_time_expect = np.trace(op_rho_ss_avg,axis1=0,axis2=1)
-        
-        
-        
         
         return one_op_one_time_expect
     
@@ -586,64 +527,47 @@ class QSys:
     
         '''
         
-        
-        
         if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-6                                  #Absolute tolerance
-            opts.rtol = 1e-8                                  #Relative tolerance
+            opts = Options()                                  
+            opts.atol = 1e-6                                  
+            opts.rtol = 1e-8                                  
             opts.nsteps= 10e+6   
-      
-        
       
         op_dims = np.shape(op1)[-1]  
       
-        
-      
-       
-     
-        
-       
-        
-       
         '''
-        Next step is to iterate this steady state rho_s forward in time. I'll choose the times
-        to be evenly spread out within T, the time scale of the Hamiltonian
+        Next step is to iterate this steady state rho_s forward in time. I'll 
+            choose the times to be evenly spread out within T, the time scale of 
+            the Hamiltonian
         
-        In this step I also multiply in the lowering operator in the Floquet STATE basis at the correct time,
-        from (taulist[-1]+dt) to (taulist[-1]+dt+tlist[-1])
+        In this step I also multiply in the lowering operator in the Floquet 
+            STATE basis at the correct time, from (taulist[-1]+dt) to 
+            (taulist[-1]+dt+tlist[-1])
         '''
-        
-    
-        one_op_rhoss_prod = [ op1[i]                       \
+
+        one_op_rhoss_prod = [ op1[i]                       
                               @ np.reshape(
                                     scp.integrate.solve_ivp(flm.rhodot,
-                                                            t_span = (0,tlist[-1])  ,
-                                                            y0=rho0               ,
-                                                            args=(Rdic,omega)               ,
-                                                            method='DOP853'         ,
-                                                            t_eval=(tlist)            ,
-                                                            rtol=opts.rtol              ,
-                                                            atol=opts.atol).y[:,i]       ,
+                                                            t_span = (0,tlist[-1]),
+                                                            y0=rho0,
+                                                            args=(Rdic,omega),
+                                                            method='DOP853',
+                                                            t_eval=(tlist),
+                                                            rtol=opts.rtol,
+                                                            atol=opts.atol).y[:,i],
                                             (op_dims,op_dims),order='F')  
                                 for i in range(len(tlist))]
-            
-    
-        
+
         '''
-        Setting up a matrix to have rows equal to the number of tau values and columns equal to the number of t values
-        At the end I'll average over each row to get a vector where each entry is a tau value and an averaged t value
+        Setting up a matrix to have rows equal to the number of tau values and 
+            columns equal to the number of t values. At the end I'll average 
+            over each row to get a vector where each entry is a tau value and 
+            an averaged t value
         '''
-    
-        # print('Finished B-States')
-        
         two_op_rho_ss_unavg = np.zeros( (len(one_op_rhoss_prod), len(taulist), op_dims,op_dims), dtype='complex_' ) 
-        # print('Starting A States')
         for tdx, one_op_rhoss_single_t in enumerate(one_op_rhoss_prod): #First for loop to find the tau outputs for each t value
-            #New "starting time"
             initial_tau = tlist[tdx]
             
-            # print('Filling column',tdx+1,'of',len(Bstates))
             one_op_rho_ss_unavg_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
                                                 flm.rhodot,
                                                 t_span = (initial_tau,initial_tau+taulist[-1]), 
@@ -654,24 +578,22 @@ class QSys:
                                                 rtol=opts.rtol,
                                                 atol=opts.atol).y,
                                    op_dims,axis=0)),(0,1,2),(1,0,2))
-            
             '''
             STOP CHANGING THE ORDER OF THE TRANSPOSE FENTON. IT ISN'T GOING TO FIX IT
             TIMES I WAS WEAK: 14
             '''
             
             two_op_rho_ss_unavg[tdx,...] = op2[(tdx):(len(taulist)+tdx)]@ one_op_rho_ss_unavg_tau_evolution
-        # print('found unaveraged A-States')   
+ 
         '''
         Okay so the output matrix from above is a bunch of 2x2 density matrices
-        where the value idx1 refers to the tau value and the value idx refers to the t value
+            where the value idx1 refers to the tau value and the value idx 
+            refers to the t value
     
-        Going forward I should now average over each "row" of t values, i.e. average over idx
+        Going forward I should now average over each "row" of t values, i.e. 
+            average over idx
         '''
-        
         two_op_rho_ss_avg = np.mean( two_op_rho_ss_unavg,axis=0)
-        
-        
         two_op_two_time_expect = np.trace(two_op_rho_ss_avg,axis1=1,axis2=2)
         
         return two_op_two_time_expect
@@ -718,44 +640,29 @@ class QSys:
             opts.nsteps= 10e+6   
       
         op_dims = np.shape(op1)[-1]                                                        
-       
-    
         
-       
-        
-       
-        '''
-        Evolving one more period forward for averaging purposes
-    
-        '''
         D_rhoss_A = [ op4[i] @
                     np.reshape(
                         scp.integrate.solve_ivp(flm.rhodot,
-                                                t_span = (0,tlist[-1])  ,
-                                                y0=rho0                ,
-                                                args=(Rdic,omega)               ,
-                                                method='DOP853'         ,
-                                                t_eval=(tlist)            ,
-                                                rtol=opts.rtol              ,
-                                                atol=opts.atol).y[:,i]       ,
+                                                t_span = (0,tlist[-1]),
+                                                y0=rho0,
+                                                args=(Rdic,omega),
+                                                method='DOP853',
+                                                t_eval=(tlist),
+                                                rtol=opts.rtol,
+                                                atol=opts.atol).y[:,i],
                                 (op_dims,op_dims),order='F')   
                     @ op1[i]
                     for i in range(len(tlist))]
         
         '''
-        Forming the innermost t (as opposed to t+tau) portion of the g2 numerator
+        Forming the innermost t (as opposed to t+tau) portion of the 4_op product
         '''
-        # D_rhoss_A = [sys_f_low[len(taulist)+idx] @ rhoss_floquet_t[idx] @ sys_f_raise[len(taulist)+idx] for idx in range(Nt)]
-        
-        
-    
-        unavgd_4op_rhoss   = np.zeros( (len( D_rhoss_A)         , len(taulist), op_dims,op_dims), dtype='complex_' ) 
+        unavgd_4op_rhoss   = np.zeros( (len( D_rhoss_A), len(taulist), op_dims,op_dims),
+                                      dtype='complex_' ) 
         for tdx in range(len(tlist)): #First for loop to find the tau outputs for each t value
-            #New "starting time"
             initial_tau = tlist[tdx]
-            
-            
-            
+
             oper_state_tau_evolution = np.moveaxis(np.dstack(np.split(scp.integrate.solve_ivp(
                                                 flm.rhodot,
                                                 t_span = (initial_tau,initial_tau+taulist[-1]), 
@@ -766,19 +673,13 @@ class QSys:
                                                 rtol=opts.rtol,
                                                 atol=opts.atol).y,
                                     op_dims,axis=0)),(0,1,2),(1,0,2))
-            
-            
-            
-            
+
             unavgd_4op_rhoss[tdx,...]   = (op2 @ op3)[(tdx):(len(taulist)+tdx)] @ oper_state_tau_evolution
-           
-        
+
         avgd_4op_rhoss   = np.mean(unavgd_4op_rhoss,axis=0)
-        
         expect4op2t = np.trace( avgd_4op_rhoss  , axis1=1, axis2=2)
        
         return expect4op2t
-
     
 ############################################################################### 
 ###############################################################################                    
@@ -788,8 +689,6 @@ class QSys:
     
     def ExciteSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]),evol_time = None, opts = None): 
         '''
-        
-
         Parameters
         ----------
         Nt : int
@@ -814,30 +713,24 @@ class QSys:
         opts : Options object, optional
             Optional arguments for solve_ivp solvers. The default is None.
 
-
-
         Returns
         -------
         excitevals : Dic
         Dictionary of {detection polarizaion:excitation value} entries
 
         '''
-            ############### Time evolving rho0 with solve_ivp#########################
-        
-        
-        
+
         if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-6                                  #Absolute tolerance
-            opts.rtol = 1e-8                                  #Relative tolerance
-            opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
+            opts = Options()                                  
+            opts.atol = 1e-6                                  
+            opts.rtol = 1e-8                                 
+            opts.nsteps= 10e+8                               
         
-        
-        
-        Nt = Nt                                        #Number of Points
-        timet = self.T                                      #Length of time of tlist defined to be one period of the system
-        dt = timet/Nt                                      #Time point spacing in tlist
-        tlist = np.linspace(0, timet-dt, Nt)               #Combining everything to make tlist
+        #tlist definition
+        Nt = Nt                                            
+        timet = self.T                                     
+        dt = timet/Nt                                      
+        tlist = np.linspace(0, timet-dt, Nt)               
         
         #Taulist Definition
         Ntau = (Nt)*(tau)                                    
@@ -845,24 +738,36 @@ class QSys:
         dtau = dt                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
-        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
-        # print('found f0, qe, f_states_all_periods')
-        
-        
-        
-        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)       
-        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
-        # print('Built R(t)')
+        steadystate_time = fmm.evol_time(np.amin(np.array([c_op.mag 
+                                                           for c_op in self.c_op_list])),
+                                         self.T,evol_time = evol_time)
+        (f0,qe,
+         f_modes_list_one_period,
+         f_states_all_periods,         
+         f_states_all_periods_conjt) = fmm.prepWork(self.Ham(),
+                                                    self.T,
+                                                    self.Hargs,
+                                                    tlist,
+                                                    taulist,
+                                                    steadystate_time, 
+                                                    opts = opts) 
+            
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt, 
+                                                                   tlist, 
+                                                                   [c_op.mat for c_op in self.c_op_list], 
+                                                                   f_modes_list_one_period)       
+        Rdic = flm.floquet_rate_matrix(qe,
+                                       lowop_floquet_fourier_amps_list,
+                                       [c_op.mag for c_op in self.c_op_list],
+                                       self.beat,time_sensitivity )
 
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),
+                                                                                self.QD.dipoles,
+                                                                                detpols)
 
-        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
-        # print('set detection polarization')
-        
-
-        
         '''
-        Looping over detection polarizations, to hopefully make things faster
+        Looping over detection polarizations, calculating the spectrum for each
+            detection polarization.
         '''
         excitevals = {}
         for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
@@ -871,22 +776,27 @@ class QSys:
             Doing the raising and lowering operator transformations, to move them
                 into the Floquet basis for every t_inf+t
             '''
-            
-            pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
+
+            pop_op = (f_states_all_periods_conjt 
+                      @ (detpol_low_op.dag()*detpol_low_op).full() 
+                      @ f_states_all_periods)
             
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
+            rho_steadystate = self.rho_time_evol(rho0_floquet,
+                                                 Nt,
+                                                 args = (Rdic,self.beat/2),
+                                                 T = self.T,
+                                                 evol_time = steadystate_time)
             
-            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
-            excitevals[detpols[Ldx]] = self.expect_1op_1t(pop_op,rho_steadystate,tlist,Rdic,self.beat/2,opts = opts)
-            
-            # print('Finished Detpol',detpols[Ldx])
-        # print('Finished excitation spectrum')  
+            excitevals[detpols[Ldx]] = self.expect_1op_1t(pop_op,
+                                                          rho_steadystate,
+                                                          tlist,Rdic,
+                                                          self.beat/2,
+                                                          opts = opts)
         return  excitevals
     
     def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), evol_time = None, opts = None):       
         '''
-        
-
         Parameters
         ----------
         Nt : int
@@ -915,26 +825,19 @@ class QSys:
         -------
         TYPE
             DESCRIPTION.
-
         '''
-        ############### Time evolving rho0 with solve_ivp#########################
-        
-             
-        
-        
         
         if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-6                                  #Absolute tolerance
-            opts.rtol = 1e-8                                  #Relative tolerance
-            opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
-        
-        
-        
-        Nt = Nt                                        #Number of Points
-        timet = self.T                                      #Length of time of tlist defined to be one period of the system
-        dt = timet/Nt                                      #Time point spacing in tlist
-        tlist = np.linspace(0, timet-dt, Nt)               #Combining everything to make tlist
+            opts = Options()                                 
+            opts.atol = 1e-6                                  
+            opts.rtol = 1e-8                                  
+            opts.nsteps= 10e+8     
+                           
+        #tlist definition
+        Nt = Nt                                        
+        timet = self.T                                      
+        dt = timet/Nt                                      
+        tlist = np.linspace(0, timet-dt, Nt)               
         
         #Taulist Definition
         Ntau = (Nt)*(tau)                                    
@@ -942,79 +845,68 @@ class QSys:
         dtau = dt                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
-        '''
-        Defining the total time of evolution for use in calculating the floquet states
-        '''
-        #Taulist Definition
-        NtauF = (Nt)*2*(tau)                                    
-        taumeF = 2*tau*self.T                          
-        dtauF = dt                                 
-        taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
+        steadystate_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),
+                                         self.T,
+                                         evol_time = evol_time)
+        (f0,qe,
+         f_modes_list_one_period,
+         f_states_all_periods,
+         f_states_all_periods_conjt) = fmm.prepWork(self.Ham(),
+                                                    self.T,
+                                                    self.Hargs,
+                                                    tlist,
+                                                    taulist,
+                                                    steadystate_time,
+                                                    opts = opts) 
 
-        
-        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
-        
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,
+                                                                   tlist,
+                                                                   [c_op.mat for c_op in self.c_op_list],
+                                                                   f_modes_list_one_period)
 
-               
-        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
+        Rdic = flm.floquet_rate_matrix(qe,
+                                       lowop_floquet_fourier_amps_list,
+                                       [c_op.mag for c_op in self.c_op_list],
+                                       self.beat,time_sensitivity)
 
-        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
-
-        
-        
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier(self.QD.lowering_operator(),
+                                                                                self.QD.dipoles,
+                                                                                detpols)
         '''
-        Looping over detection polarizations, to hopefully make things faster
+        Looping over detection polarizations, calculating the spectrum for each
+            detection polarization.
         '''
-        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
-           
-        
-        
-        
         Z = {}
-        g1dic = {}
         for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
 
-            sys_f_low = f_states_all_periods_conjt @ (detpol_low_op).full() @ f_states_all_periods
+            sys_f_low = (f_states_all_periods_conjt 
+                         @ (detpol_low_op).full() 
+                         @ f_states_all_periods)
             sys_f_raise = np.transpose(sys_f_low,axes=(0,2,1)).conj()
-            
-            
+
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
+            rho_steadystate = self.rho_time_evol(rho0_floquet,
+                                                 Nt,
+                                                 args = (Rdic,self.beat/2),
+                                                 T = self.T,
+                                                 evol_time = steadystate_time)
             
+            g1_unnormed = self.expect_2op_2t(sys_f_low, 
+                                             sys_f_raise, 
+                                             rho_steadystate, 
+                                             tlist, 
+                                             taulist, 
+                                             Rdic, 
+                                             self.beat/2)
             
-            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
-            g1 = self.expect_2op_2t(sys_f_low, sys_f_raise, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
-            
-            spec = np.fft.fftshift(np.fft.fft(g1,axis=0))
+            spec = np.fft.fftshift(np.fft.fft(g1_unnormed,axis=0))
     
-            Z[detpols[Ldx]] = np.real(spec)/(len(g1))
-        
-            # print('Finished Detpol',detpols[Ldx])
+            Z[detpols[Ldx]] = np.real(spec)/(len(g1_unnormed))
         
         return Z
        
     def g1_tau(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False',evol_time = None, opts = None): 
         '''
-        
-
-        Parameters
-        ----------
-        Nt : TYPE
-            DESCRIPTION.
-        tau : TYPE
-            DESCRIPTION.
-        rho0 : TYPE
-            DESCRIPTION.
-        time_sensitivity : TYPE, optional
-            DESCRIPTION. The default is 0.
-        detpols : TYPE, optional
-            DESCRIPTION. The default is np.array([None,None,None]).
-        retg1 : TYPE, optional
-            DESCRIPTION. The default is 'False'.
-        opts : TYPE, optional
-            DESCRIPTION. The default is None.
-        
-
         Returns
         -------
         None.
@@ -1052,73 +944,79 @@ class QSys:
             DESCRIPTION.
 
         '''
-        ############### Time evolving rho0 with solve_ivp#########################
-        
-             
-        
-        
-        
+
         if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-6                                  #Absolute tolerance
-            opts.rtol = 1e-8                                  #Relative tolerance
-            opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
+            opts = Options()
+            opts.atol = 1e-6
+            opts.rtol = 1e-8
+            opts.nsteps= 10e+8
         
         
-        
-        Nt = Nt                                        #Number of Points
-        timet = self.T                                      #Length of time of tlist defined to be one period of the system
-        dt = timet/Nt                                      #Time point spacing in tlist
-        tlist = np.linspace(0, timet-dt, Nt)               #Combining everything to make tlist
+        #tlist definition
+        Nt = Nt
+        timet = self.T
+        dt = timet/Nt
+        tlist = np.linspace(0, timet-dt, Nt)
         
         #Taulist Definition
         Ntau = (Nt)*(tau)                                    
         taume = tau*self.T                          
         dtau = dt                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
+ 
+        steadystate_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),
+                                         self.T,
+                                         evol_time = evol_time)
+        (f0,qe,
+         f_modes_list_one_period,
+         f_states_all_periods,
+         f_states_all_periods_conjt) = fmm.prepWork(self.Ham(),
+                                                    self.T,
+                                                    self.Hargs,
+                                                    tlist,
+                                                    taulist,
+                                                    ss_time,
+                                                    opts = opts) 
+
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,
+                                                                   tlist,
+                                                                   [c_op.mat for c_op in self.c_op_list],
+                                                                   f_modes_list_one_period)
+
+        Rdic = flm.floquet_rate_matrix(qe,
+                                       lowop_floquet_fourier_amps_list,
+                                       [c_op.mag for c_op in self.c_op_list],
+                                       self.beat,time_sensitivity )
+        
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier(self.QD.lowering_operator(),
+                                                                                self.QD.dipoles,
+                                                                                detpols)
         
         '''
-        Defining the total time of evolution for use in calculating the floquet states
+        Looping over detection polarizations, calculating the spectrum for each
+            detection polarization.
         '''
-        #Taulist Definition
-        NtauF = (Nt)*2*(tau)                                    
-        taumeF = 2*tau*self.T                          
-        dtauF = dt                                 
-        taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
-
-        
-        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
-        
-
-               
-        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
-
-        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
-
-        
-        
-        '''
-        Looping over detection polarizations, to hopefully make things faster
-        '''
-        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
-           
-        
-        
-        
-        Z = {}
         g1dic = {}
         for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
 
-            sys_f_low = f_states_all_periods_conjt @ (detpol_low_op).full() @ f_states_all_periods
+            sys_f_low = (f_states_all_periods_conjt 
+                         @ (detpol_low_op).full() 
+                         @ f_states_all_periods)
             sys_f_raise = np.transpose(sys_f_low,axes=(0,2,1)).conj()
             
-            
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
+            rho_steadystate = self.rho_time_evol(rho0_floquet,
+                                                 Nt,
+                                                 args = (Rdic,self.beat/2),
+                                                 T = self.T,
+                                                 evol_time = steadystate_time)
             
-            
-            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
-            g1 = self.expect_2op_2t(sys_f_low, sys_f_raise, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
+            g1 = self.expect_2op_2t(sys_f_low,
+                                    sys_f_raise,
+                                    rho_steadystate,
+                                    tlist, taulist,
+                                    Rdic,
+                                    self.beat/2)
             
         
             return g1    
@@ -1157,23 +1055,18 @@ class QSys:
             The tau list over which g2(t,t+tau) is calculated.
 
         '''
-        ############### Time evolving rho0 with solve_ivp#########################
-        
-        
-        
-        
         if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-8                                  #Absolute tolerance
-            opts.rtol = 1e-10                                  #Relative tolerance
-            opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
+            opts = Options()
+            opts.atol = 1e-8
+            opts.rtol = 1e-10
+            opts.nsteps= 10e+8
         
         
-        
-        Nt = Nt                                        #Number of Points
-        timet = self.T                                      #Length of time of tlist defined to be one period of the system
-        dt = timet/Nt                                      #Time point spacing in tlist
-        tlist = np.linspace(0, timet-dt, Nt)               #Combining everything to make tlist
+        #tlist definition
+        Nt = Nt
+        timet = self.T
+        dt = timet/Nt
+        tlist = np.linspace(0, timet-dt, Nt)
         
         #Taulist Definition
         Ntau = (Nt)*(tau)                                    
@@ -1181,67 +1074,85 @@ class QSys:
         dtau = dt                                 
         taulist = np.linspace(0, taume-dtau, Ntau)       
         
-        '''
-        Defining the total time of evolution for use in calculating the floquet states
-        '''
-        #Taulist Definition
-        NtauF = (Nt)*2*(tau)                                    
-        taumeF = 2*tau*self.T                          
-        dtauF = dt                                 
-        taulistF = np.linspace(0, taumeF-dtauF, NtauF)       
+        steadystate_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),
+                                         self.T,
+                                         evol_time = evol_time)
+        (f0,qe,
+         f_modes_list_one_period,
+         f_states_all_periods,
+         f_states_all_periods_conjt) = fmm.prepWork(self.Ham(),
+                                                    self.T,
+                                                    self.Hargs,
+                                                    tlist,
+                                                    taulist,steadystate_time,
+                                                    opts = opts)   
 
-        
-        ss_time = fmm.evol_time(np.amin(np.array([c_op.mag for c_op in self.c_op_list])),self.T,evol_time = evol_time)
-        f0,qe,f_modes_list_one_period,f_states_all_periods,f_states_all_periods_conjt= fmm.prepWork(self.Ham(),self.T,self.Hargs,tlist,taulist,ss_time, opts = opts) 
-        
-        print('found f0, qe, f_states_all_periods')
-               
-        '''
-        Doing the raising and lowering operator transformations, to move them
-            into the Floquet basis for every t_inf+t
+        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,
+                                                                   tlist,
+                                                                   [c_op.mat for c_op in self.c_op_list],
+                                                                   f_modes_list_one_period)
 
-        Calling the raising and lowering operators for use below
-        
-        '''      
+        Rdic = flm.floquet_rate_matrix(qe,
+                                       lowop_floquet_fourier_amps_list,
+                                       [c_op.mag for c_op in self.c_op_list],
+                                       self.beat,time_sensitivity )
 
-        lowop_floquet_fourier_amps_list = flm.floquet_fourier_amps(Nt,tlist, [c_op.mat for c_op in self.c_op_list], f_modes_list_one_period, opts = opts)
-
-        Rdic = flm.floquet_rate_matrix(qe,lowop_floquet_fourier_amps_list,[c_op.mag for c_op in self.c_op_list],self.beat,time_sensitivity )
-        print('Built R(t)')
-        
+        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier(self.QD.lowering_operator(),
+                                                                                self.QD.dipoles,
+                                                                                detpols)
         
         '''
-        Looping over detection polarizations, to hopefully make things faster
+        Looping over detection polarizations, calculating the spectrum for each
+            detection polarization.
         '''
-        lowop_detection_polarization_modified_list =  flm.lowop_detpol_modifier( self.QD.lowering_operator(),self.QD.dipoles,detpols)
-           
-    
         g2func = {}
         for Ldx, detpol_low_op in enumerate(lowop_detection_polarization_modified_list):
-
-            sys_f_low = f_states_all_periods_conjt @ (detpol_low_op).full() @ f_states_all_periods
+            '''
+            Doing the raising and lowering operator transformations, to move them
+                into the Floquet basis for every t_inf+t
+            '''
+            sys_f_low = (f_states_all_periods_conjt 
+                         @ (detpol_low_op).full() 
+                         @ f_states_all_periods)
             sys_f_raise = np.transpose(sys_f_low,axes=(0,2,1)).conj()
-            pop_op = f_states_all_periods_conjt @ (detpol_low_op.dag()*detpol_low_op).full() @ f_states_all_periods
+            pop_op = (f_states_all_periods_conjt 
+                      @ (detpol_low_op.dag()*detpol_low_op).full() 
+                      @ f_states_all_periods)
 
             rho0_floquet = operator_to_vector(rho0.transform(f0,False)).full()[:,0]
-            rho_steadystate = self.rho_time_evol(rho0_floquet,Nt,args = (Rdic,self.beat/2),T = self.T,evol_time = ss_time)
+            rho_steadystate = self.rho_time_evol(rho0_floquet,
+                                                 Nt,
+                                                 args = (Rdic,self.beat/2),
+                                                 T = self.T,
+                                                 evol_time = steadystate_time)
             
 
-            g2_denom_expect = self.expect_1op_1t(pop_op, rho_steadystate, tlist,  Rdic, self.beat/2,taulist=taulist)
-            g2_numer_expect = self.expect_4op_2t(sys_f_raise, sys_f_raise, sys_f_low, sys_f_low, rho_steadystate, tlist, taulist, Rdic, self.beat/2)
-                
-            '''
-            Taking t = 0 as "statistically stationary" or w/e it's called means 
-            the t value I use doesn't really matter I think, so I can just use
-            the t=0 as my t value for all tau values
-            ''' 
-            g2func[detpols[Ldx]] = np.array([g2_numer_expect[taudx]/(g2_denom_expect[0] * g2_denom_expect[taudx]) for taudx in range(len(taulist))])
+            g2_denom_expect = self.expect_1op_1t(pop_op,
+                                                 rho_steadystate,
+                                                 tlist,
+                                                 Rdic,
+                                                 self.beat/2,
+                                                 taulist=taulist)
+            g2_numer_expect = self.expect_4op_2t(sys_f_raise,
+                                                 sys_f_raise,
+                                                 sys_f_low,
+                                                 sys_f_low,
+                                                 rho_steadystate,
+                                                 tlist,
+                                                 taulist,
+                                                 Rdic,
+                                                 self.beat/2)
+            
+            g2func[detpols[Ldx]] = np.array([g2_numer_expect[taudx]
+                                             /(g2_denom_expect[0]
+                                               *g2_denom_expect[taudx]) 
+                                             for taudx in range(len(taulist))])
             print('finished',detpols[Ldx])
         return g2func, taulist  
     
 ############################################################################### 
 ###############################################################################                    
-################### Misc, or Unused but could be useful #######################
+####################### CURRENTLY NOT USABLE/USEFUL ###########################
 ###############################################################################  
 ###############################################################################              
             
@@ -1262,7 +1173,7 @@ class QSys:
 
         Returns
         -------
-       BROKEN RIGHT NOW. ONLY WORKS FOR ONE COLLAPSE OPERATOR UNTIL I (FENTON) ADD A LOOP SOMEWHERE
+       BROKEN RIGHT NOW. ONLY WORKS FOR ONE COLLAPSE OPERATOR UNTIL I ADD A LOOP SOMEWHERE
 
         '''
         
@@ -1305,7 +1216,8 @@ class QSys:
     
     def TransitionEnergies(self):  
         '''
-        
+        THIS METHOD IS CURRENTLY ONLY USEFUL IN THE SINGULAR INSTANCE
+        OF THE VOIGT CONFIG. WAS USING IT FOR PREDICTING PEAKS FOR TESTING. 
 
         Returns
         -------

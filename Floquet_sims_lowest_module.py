@@ -2,90 +2,65 @@
 
 import numpy.ma as ma
 import numpy as np
-from qutip import *
 import itertools
-import math
 import scipy as scp
+
+from qutip import *
 
 '''
 This script contains 'lowest-level' definition functions that are called
     by many things in the mid-level functions and the top-level object 
     definitions
 '''
-################### Floquet mode and state solver Functions ############
-
-
-
-def floquet_fourier_amps(Nt,tlist,bath_operator_list, floquet_modes_array, opts = None):
+################### Floquet mode and state solver Functions ###################
+def floquet_fourier_amps(Nt,tlist,bath_operator_list, floquet_modes_array):
     '''
-    
-
     Parameters
     ----------
     Nt : int
-        Number of evenly space points in one time period of the Hamiltonian. Should probably be a power of 2.
+        Number of evenly space points in one time period of the Hamiltonian. 
+        Should be a power of 2.
     tlist : np.linspace
-        List of Nt time points evenly distributed within one period T of the Hamiltonian
+        List of Nt time points evenly distributed within one period T of the 
+        Hamiltonian
     bath_operator_list : list of collapse operator objects
-        list of collapse operator objects, used to calculate the Fourier Amplitudes for each rate matrix
+        list of collapse operator objects, used to calculate the Fourier 
+        Amplitudes for each rate matrix
     floquet_modes_array : np.array
-        Array of Floquet Modes, used to transform the collapse operators into the FLoquet Mode Basis
-    opts : TYPE, optional
-       optional arguments for solver. The default is None.
+        Array of Floquet Modes, used to transform the collapse operators into 
+        the FLoquet Mode Basis
 
     Returns
     -------
     amplitude_list : list of numpy arrays
         List of Fourier amplitude matrices, one for each collapse operator
-
     '''
     amplitude_list = []
     for c_op in bath_operator_list:
-        if opts == None:
-            opts = Options()                                  #Setting up the options used in the mode and state solvers
-            opts.atol = 1e-8                                  #Absolute tolerance
-            opts.rtol = 1e-8                                  #Relative tolerance
-            opts.nsteps= 10e+8                                #Maximum number of Steps                              #Maximum number of Steps
-        
-        
-        Hdim = np.shape(c_op)[0]
         
         '''
-        I'm going to keep this as its own method for now, as it might be nice
-            to be able to pull graphs of the FFT of the lowering operators when
-            desired.
-            
-            
-        This function transforms the lowering operator into the Floquet mode basis
+        These two lines transform the lowering operator into the Floquet mode 
+            basis
         '''
-        
-        floquet_modes_array_conjT = np.transpose(floquet_modes_array.conj(),(0,2,1) )
-        
-        c_op_Floquet_basis = (floquet_modes_array_conjT @ c_op @ floquet_modes_array)
-                   
-    
-        
+        floquet_modes_array_conjT = np.transpose(floquet_modes_array.conj(),
+                                                 (0,2,1))
+        c_op_Floquet_basis = (floquet_modes_array_conjT 
+                              @ c_op 
+                              @ floquet_modes_array)
         '''
         Performing the 1-D FFT to find the Fourier amplitudes of this specific
             lowering operator in the Floquet basis
             
         Divided by the length of tlist for normalization
         '''
-        
-        c_op_Fourier_amplitudes = np.sum(scp.fft.fft(c_op_Floquet_basis,axis=0),axis=0)/(len(tlist))
+        c_op_Fourier_amplitudes = np.sum(scp.fft.fft(c_op_Floquet_basis,axis=0)
+                                         ,axis=0)/(len(tlist))
         amplitude_list.append(c_op_Fourier_amplitudes)
         
-     
     return amplitude_list
-
-
-
-
 
 def floquet_rate_matrix(qe,fourier_amplitude_matrices_list,c_op_rates,beatfreq,time_sense=0):
     '''
-    
-
     Parameters
     ----------
     qe : list
@@ -112,8 +87,6 @@ def floquet_rate_matrix(qe,fourier_amplitude_matrices_list,c_op_rates,beatfreq,t
         This is the 2D rate matrix for the system, created by summing the 
             Rate matrix of each individual collapse operator. Something 
             something Rate Matrix something something linear Operator.
-            
-
     '''
     Rate_matrix_list = []
     for cdx, c_op_amplitude_matrix in enumerate(fourier_amplitude_matrices_list):
@@ -139,29 +112,19 @@ def floquet_rate_matrix(qe,fourier_amplitude_matrices_list,c_op_rates,beatfreq,t
             FLiME" OneNote page on my report tab. Too much to explain it here!
         
         '''
-        
         '''
-        Noteworthy for sum ordering purposes: itertools likes to iterate over the LAST thing first.
+        Noteworthy (for me!) for sum ordering purposes: itertools likes to iterate over the LAST thing first.
             E.g. if you iterated over all combinations of a list of 4 numbers from 0-3, it would go
             [0,0,0,0],[0,0,0,1],[0,0,0,2]...[0,0,1,0],[0,0,1,1],....[3,3,3,3]
         '''
-        iterations_test_list = [Hdx for Hdx in itertools.product(range(0,Hdim),repeat = 4)]  #Iterating over all possible iterations of A,AP,B,BP
-        
-        '''
-        From here on out, I'll be using the same indices for everything:
-            
-        alpha = var_name[0]
-        alpha' = var_name[1]
-        beta = var_name[2]
-        beta' = var_name[3]
-        '''
-        
-        
-        #The asterisk is to unpack the tuple from iterations_test_list into arguments for the function
+        #Iterating over all possible iterations of A,AP,B,BP
+        iterations_test_list = [Hdx for Hdx in itertools.product(range(0,Hdim),
+                                                                 repeat = 4)]  
+        #Finding the actual time dependance (as a function)
         time_dependence_list = [delta(*test_itx) for test_itx in iterations_test_list]
-        
-        valid_TDXs = (~ma.masked_where(np.absolute(time_dependence_list)>time_sense,time_dependence_list).mask).nonzero()[0] #Creates a list of the indices of the time dependence coefficient array whose entries are within the time dependence constraint time_sense
-        
+        valid_TDXs = (~ma.masked_where(
+                        np.absolute(time_dependence_list)>time_sense,
+                        time_dependence_list).mask).nonzero()[0]         
     
     
         valid_time_dependence_summation_index_values = [tuple(iterations_test_list[valid_index]) for valid_index in valid_TDXs] #creates a list tuples that are the valid (a,b,ap,bp,l,lp) indices to construct R(t) with the given secular constraint
