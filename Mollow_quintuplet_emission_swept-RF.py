@@ -168,7 +168,7 @@ for idR, RF in enumerate(RF_array):
        
     
 
-    spec1 = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'],retg1='True')
+    spec1 = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
 
     Z0L.append(spec1['X']+spec1['Y'])
     Z0C.append(spec1['SP']+spec1['SM'])

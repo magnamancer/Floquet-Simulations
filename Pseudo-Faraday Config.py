@@ -190,7 +190,7 @@ for idz, val in enumerate(P_array):
         transY2=(abs(Transitions[3]-Transitions[0]))
     
     
-    spec1 = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0.0, detpols = ['X','Y','SP','SM'],retg1='True')
+    spec1 = Exp.EmisSpec(Nt,tau,rho0=rho00,time_sensitivity=0.0, detpols = ['X','Y','SP','SM'])
     
     # spec1 = Exp.ExciteSpec(Nt,tau,rho0=rho00,time_sensitivity=0, detpols = ['X','Y','SP','SM'])
     

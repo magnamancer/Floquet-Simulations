@@ -883,7 +883,7 @@ class QSys:
         # print('Finished excitation spectrum')  
         return  excitevals
     
-    def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False', evol_time = None, opts = None):       
+    def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), evol_time = None, opts = None):       
         '''
         
 
@@ -908,11 +908,6 @@ class QSys:
             "unpolarized" detection is formed by summing the results of the two
             linear components of emission. 
             The default is np.array([None,None,None]).
-        retg1 : Boolean, optional
-            If yes, the g1 function corresponding to the evolution over
-            tau is returned.I PROBABLY NEED TO CHANGE SOMETHING IN HERE NOW
-            THAT I'VE IMPLIMENTED THE STEADYSTATE SOLVER. DON'T FORGET TO COME
-            BACK HERE FENTON. The default is 'False'.
         opts : Options object, optional
             Optional arguments for solve_ivp solvers. The default is None.
 
