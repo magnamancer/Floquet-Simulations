@@ -245,7 +245,6 @@ def prepWork(H,T,args,tlist,taulist, ss_time = None, opts = None):
         3) For each time "t" and mode "mode," the complex exponential given by exp(-1j*qe[mode]*t) is multiplied into the corresponding
             mode at time t to solve for the Floquet State basis over the full time period of evolution given by tau
             
-    AS OF NOW THE TAULIST ONLY GOES FROM 0 TO TAU+T. THIS WORKS FOR EXCITESPEC BUT NOT EMISSPEC. DEAL WITH THIS WHEN YOU NEED TO, FENTON
     '''
     
     

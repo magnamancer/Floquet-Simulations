@@ -501,7 +501,7 @@ class QSys:
         to be evenly spread out within T, the time scale of the Hamiltonian.
         
         In this step I also multiply in the population operator in the Floquet STATE basis at the correct time, to get the un-time-averaged excitation spectra. Then I average the result over
-        the time axis and take the trace to get the population value (I think?) in the steady state.
+        the time axis and take the trace to get the population value in the steady state.
         '''
         
         op_rho_ss_unavg = [ (oper[i])                       \
@@ -880,7 +880,7 @@ class QSys:
             excitevals[detpols[Ldx]] = self.expect_1op_1t(pop_op,rho_steadystate,tlist,Rdic,self.beat/2,opts = opts)
             
             # print('Finished Detpol',detpols[Ldx])
-        print('Finished excitation spectrum')  
+        # print('Finished excitation spectrum')  
         return  excitevals
     
     def EmisSpec(self,Nt,tau,rho0,time_sensitivity = 0,detpols = np.array([None,None,None]), retg1 = 'False', evol_time = None, opts = None):       
@@ -994,7 +994,7 @@ class QSys:
     
             Z[detpols[Ldx]] = np.real(spec)/(len(g1))
         
-            print('Finished Detpol',detpols[Ldx])
+            # print('Finished Detpol',detpols[Ldx])
         
         return Z
        
