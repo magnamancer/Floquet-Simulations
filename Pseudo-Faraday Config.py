@@ -30,7 +30,7 @@ dot = FC.QD(4,states,dipole,gfactors)
 
 
 '''
-Defining the Lowering Operator
+Defining the Collapse Operators
 '''
 manifolds_collapse_rate = np.sqrt(2*np.pi*.0000025)
 

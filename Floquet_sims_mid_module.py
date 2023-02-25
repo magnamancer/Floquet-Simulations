@@ -95,9 +95,6 @@ def floquet_modes2(H, T, args=None, sort=False, U=None, options=None):
 
     return kets_order, e_quasi[order]
 
-
-
-
 def floquet_modes_table2(f_modes_0, f_energies, tlist, H, T, args=None, options=None):
     """
     Pre-calculate the Floquet modes for a range of times spanning the floquet
@@ -156,8 +153,7 @@ def floquet_modes_table2(f_modes_0, f_energies, tlist, H, T, args=None, options=
                 f_state_t * np.exp(1j * f_energies[n] * tlist_period[t_idx]))
     return f_modes_table_t
 
-
-def prepWork(H,T,args,tlist,taulist, ss_time = None, opts = None):
+def prepWork(H,T,args,tlist,taulist, start_time = 0, opts = None):
     '''
     Internal Function for use in calculating time evolution with FLoquet Theory
 
@@ -173,7 +169,7 @@ def prepWork(H,T,args,tlist,taulist, ss_time = None, opts = None):
         List of Nt time points evenly distributed within one period T of the Hamiltonian
     taulist : np.linspace
         List of Ntau time points evenly distributed tau periods T of the Hamiltonian over which to evolve the system. 
-    ss_time : float, optional
+    start_time : float, optional
         The WHOLE NUMBER OF PERIODS forward time at which to begin creating
             the state tables. Called ss_time because it's usually used to pass
             the steadystate time to prepWork for steadystate calculations. 
@@ -200,41 +196,29 @@ def prepWork(H,T,args,tlist,taulist, ss_time = None, opts = None):
             it elsewhere.
 
     '''
-
-    
     if opts == None:
-        opts = Options()                                  #Setting up the options used in the mode and state solvers
-        opts.atol = 1e-4                                #Absolute tolerance
-        opts.rtol = 1e-6                                  #Relative tolerance
-        opts.nsteps= 10e+4                                #Maximum number of Steps                              #Maximum number of Steps
+        opts = Options()                                  
+        opts.atol = 1e-4                                
+        opts.rtol = 1e-6                                  
+        opts.nsteps= 10e+4                                
     
-    
-    #Making the assumption here that Hdim equals the number of rows of the time-independent Hamiltonian. Might not work always. Works now.
+    #Calling the dimensionality of the system, for use later
     Hdim = np.shape(H[0])[0]
     
-    
-    if ss_time != None:
-        start_time = ss_time
-    else:
-        start_time = 0
-    
-    # Setting useful constants to be used in a few lines
-    end_time = start_time+taulist[-1]+taulist[1]  #The length of time Tau forward for which the system is being evolved
+    #Solving the times over which I'll need to solve the lowering and raising 
+    #   operators. 
+    end_time = start_time+taulist[-1]+taulist[1]  
     num_periods = int(np.ceil((end_time)/T))
-    time_evolution_t_points = np.concatenate((start_time+taulist, end_time+tlist)) #The times over which I'll need to solve the lowering and raising operators. Runs from Tau to 2*Tau+T = 2*(N*T)+T=T(2N+1)
+    time_evolution_t_points = np.concatenate((start_time+taulist, 
+                                             end_time+tlist))     
     
-    
-    # print('starting f0')
     #Solving for the initial modes and quasienergies given by f0,qe respectively
     f0, qe = floquet_modes2( H, T,  args, sort = False, options = opts)
-    
-    # aa,corrperms = reorder(np.hstack([i.full() for i in f0]))
-    
 
     #Solving the mode table for a single period of driving, for use in transformations of the lowering operator and initial state
-    f_modes_table_t = floquet_modes_table2(             \
-                              f0,  qe, tlist, H,  T,    \
-                                  args, options = opts) 
+    f_modes_table_t = floquet_modes_table2(             
+                                           f0,  qe, tlist, H,  T,    
+                                           args, options = opts) 
     
     
     '''
@@ -249,7 +233,8 @@ def prepWork(H,T,args,tlist,taulist, ss_time = None, opts = None):
     
     
     #Modes Table for a single period
-    f_modes_list_one_period = np.stack([np.hstack([i.full() for i in modest]) for modest in f_modes_table_t])
+    f_modes_list_one_period = np.stack([np.hstack([i.full() for i in modest]) 
+                                        for modest in f_modes_table_t])
 
     #Full time evaluation is tau number of periods +1 period for time averaging, so I need that many periods of modes
     f_modes_list_full_time = np.tile(f_modes_list_one_period, (num_periods+1,1,1)) 
@@ -258,31 +243,26 @@ def prepWork(H,T,args,tlist,taulist, ss_time = None, opts = None):
     f_modes_transpose = np.transpose(f_modes_list_full_time,(0,2,1))
     
     #Creating the array of exponentials for multiplying the modes to create the states.
-    mode_exponentials = np.stack([np.stack([np.exp(-1j*qe[mode]*(t)) for mode in range(Hdim)]) for t in time_evolution_t_points])
-    
+    mode_exponentials = np.stack([np.stack([np.exp(-1j*qe[mode]*(t)) 
+                                            for mode in range(Hdim)]) 
+                                  for t in time_evolution_t_points])
     
     #The transposed floquet states are calculated
     f_states_transposed = np.stack([
-                            np.stack([
-                                        f_modes_transpose[t,mode]* mode_exponentials[t,mode]
-                                            for mode in range(Hdim)] )
-                                                for t in range(len(time_evolution_t_points))],axis=0)
+                              np.stack([
+                                  f_modes_transpose[t,mode]*mode_exponentials[t,mode]
+                                  for mode in range(Hdim)])
+                              for t in range(len(time_evolution_t_points))],axis=0)
     
     #un-transposing the states
     fstates =  np.transpose(f_states_transposed,(0,2,1))
-   
-    
-    
-    #Solving for the conjugate transpose of the states here, for ease of use in other areas
+    #Solving the dagger now, to save space when called later
     fstatesct = np.transpose(fstates.conj(),axes=(0,2,1))
     
     return f0,qe,f_modes_list_one_period,fstates,fstatesct
 
-
-def evol_time(c_op_mag,T,evol_time =None):  
+def evol_time(c_op_mag,T,evol_time = None):  
     '''
-    
-
     Parameters
     ----------
     Parameters
